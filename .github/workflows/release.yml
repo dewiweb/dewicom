@@ -94,24 +94,14 @@ jobs:
         run: |
           if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
             echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > dewicom-mobile/release.keystore
-            cat > dewicom-mobile/keystore.properties << EOF
-          KEYSTORE_FILE=../release.keystore
-          KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS=${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}
-          EOF
+            printf 'KEYSTORE_FILE=../release.keystore\nKEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}\nKEY_ALIAS=${{ secrets.KEY_ALIAS }}\nKEY_PASSWORD=${{ secrets.KEY_PASSWORD }}\n' > dewicom-mobile/keystore.properties
             echo "Keystore configuré pour build release signé"
           else
             echo "Pas de keystore — build debug"
           fi
 
       - name: Build APK
-        run: |
-          if [ -f keystore.properties ]; then
-            ./gradlew assembleRelease --no-daemon
-          else
-            ./gradlew assembleDebug --no-daemon
-          fi
+        run: chmod +x gradlew && ./gradlew assembleRelease --no-daemon
         working-directory: dewicom-mobile
 
       - name: Upload APK
