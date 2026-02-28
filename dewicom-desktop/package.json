@@ -2,6 +2,11 @@
   "name": "dewicom-desktop",
   "version": "1.0.0",
   "description": "DewiCom Desktop - Application PTT cross-platform",
+  "author": "dewiweb",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dewiweb/dewicom.git"
+  },
   "main": "main.js",
   "scripts": {
     "start": "NODE_EXTRA_CA_CERTS=$(mkcert -CAROOT)/rootCA.pem electron .",
