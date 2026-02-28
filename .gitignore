@@ -38,6 +38,7 @@ dewicom-mobile/**/*.class
 # ── Signing config (ne jamais committer les secrets) ─────────────────────────
 keystore.properties
 release.keystore
+keystore-base64.txt
 *.jks
 
 # ── OS ────────────────────────────────────────────────────────────────────────
