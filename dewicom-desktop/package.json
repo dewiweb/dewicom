@@ -2,7 +2,10 @@
   "name": "dewicom-desktop",
   "version": "1.0.0",
   "description": "DewiCom Desktop - Application PTT cross-platform",
-  "author": "dewiweb",
+  "author": {
+    "name": "dewiweb",
+    "email": "dewi@dewicom.app"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/dewiweb/dewicom.git"
