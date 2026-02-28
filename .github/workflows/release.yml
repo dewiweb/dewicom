@@ -107,7 +107,7 @@ jobs:
 
       - name: Build APK
         run: |
-          if [ -f dewicom-mobile/keystore.properties ]; then
+          if [ -f keystore.properties ]; then
             ./gradlew assembleRelease --no-daemon
           else
             ./gradlew assembleDebug --no-daemon
