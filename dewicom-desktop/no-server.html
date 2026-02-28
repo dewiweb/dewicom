@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>DewiCom — Aucun serveur</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #1a1a2e;
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      gap: 20px;
+    }
+    .icon { font-size: 56px; }
+    h1 { font-size: 24px; font-weight: 700; color: #e94560; }
+    p { font-size: 14px; color: #aaa; text-align: center; max-width: 300px; line-height: 1.6; }
+    .hint {
+      background: #16213e;
+      border: 1px solid #0f3460;
+      border-radius: 8px;
+      padding: 16px 20px;
+      font-size: 13px;
+      color: #ccc;
+      max-width: 320px;
+      line-height: 1.8;
+    }
+    .hint code {
+      background: #0f3460;
+      padding: 1px 6px;
+      border-radius: 4px;
+      color: #e94560;
+      font-family: monospace;
+    }
+    button {
+      background: #e94560;
+      color: #fff;
+      border: none;
+      padding: 12px 32px;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    button:hover { opacity: 0.85; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    #status { font-size: 13px; color: #888; min-height: 18px; }
+  </style>
+</head>
+<body>
+  <div class="icon">📡</div>
+  <h1>Aucun serveur DewiCom trouvé</h1>
+  <p>L'application n'a pas trouvé de serveur DewiCom sur le réseau local.</p>
+
+  <div class="hint">
+    <strong>Pour démarrer un serveur :</strong><br>
+    <code>cd dewicom/server</code><br>
+    <code>node index.js</code><br><br>
+    Ou installe l'APK DewiCom sur un téléphone du même réseau WiFi — il lancera son propre serveur.
+  </div>
+
+  <button id="retryBtn" onclick="retry()">🔍 Rechercher à nouveau</button>
+  <div id="status"></div>
+
+  <script>
+    async function retry() {
+      const btn = document.getElementById("retryBtn");
+      const status = document.getElementById("status");
+      btn.disabled = true;
+      btn.textContent = "Recherche...";
+      status.textContent = "Scan du réseau en cours...";
+
+      if (window.DewiComDesktop) {
+        window.DewiComDesktop.onDiscoveryStatus((msg) => {
+          status.textContent = msg;
+        });
+        const result = await window.DewiComDesktop.rediscover();
+        if (result) {
+          status.textContent = "Serveur trouvé ! Connexion...";
+          // main.js va recharger la fenêtre automatiquement
+        } else {
+          status.textContent = "Toujours introuvable.";
+          btn.disabled = false;
+          btn.textContent = "🔍 Rechercher à nouveau";
+        }
+      } else {
+        status.textContent = "Erreur: API non disponible";
+        btn.disabled = false;
+        btn.textContent = "🔍 Rechercher à nouveau";
+      }
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,57 @@
+# ── Node.js ──────────────────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn
+
+# ── Electron build output ─────────────────────────────────────────────────────
+dewicom-desktop/dist/
+dewicom-desktop/.webpack/
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Certificats TLS locaux (mkcert) ───────────────────────────────────────────
+**/*.pem
+dewicom/server/certs/
+
+# ── Fichiers backup ───────────────────────────────────────────────────────────
+*.backup
+*.bak
+
+# ── Android / Gradle ──────────────────────────────────────────────────────────
+dewicom-mobile/.gradle/
+dewicom-mobile/build/
+dewicom-mobile/app/build/
+dewicom-mobile/local.properties
+dewicom-mobile/.idea/
+dewicom-mobile/**/*.iml
+dewicom-mobile/**/*.class
+*.apk
+*.aab
+*.keystore
+!dewicom-mobile/keystore.example.properties
+
+# ── Signing config (ne jamais committer les secrets) ─────────────────────────
+keystore.properties
+release.keystore
+*.jks
+
+# ── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── IDE ───────────────────────────────────────────────────────────────────────
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# ── Divers ────────────────────────────────────────────────────────────────────
+.env
+.env.local
+server.log

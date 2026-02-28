@@ -1,0 +1,46 @@
+{
+  "name": "dewicom-desktop",
+  "version": "1.0.0",
+  "description": "DewiCom Desktop - Application PTT cross-platform",
+  "main": "main.js",
+  "scripts": {
+    "start": "NODE_EXTRA_CA_CERTS=$(mkcert -CAROOT)/rootCA.pem electron .",
+    "build:linux": "electron-builder --linux",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "build:all": "electron-builder --linux --mac --win"
+  },
+  "build": {
+    "appId": "com.dewicom.desktop",
+    "productName": "DewiCom",
+    "directories": {
+      "output": "dist"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "AudioVideo"
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.utilities"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    }
+  },
+  "devDependencies": {
+    "electron": "^29.0.0",
+    "electron-builder": "^24.0.0"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "socket.io": "^4.8.3"
+  }
+}

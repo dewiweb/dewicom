@@ -1,0 +1,1499 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#0d0d0d" />
+  <title>DewiCom</title>
+  <link rel="manifest" href="/manifest.json" />
+  <style>
+    :root {
+      --bg: #0d0d0d;
+      --surface: #161616;
+      --surface2: #1f1f1f;
+      --surface3: #272727;
+      --border: #303030;
+      --border2: #3a3a3a;
+      --text: #f0f0f0;
+      --text2: #b0b0b0;
+      --muted: #606060;
+      --green: #22c55e;
+      --green-dim: #22c55e18;
+      --green-glow: 0 0 12px #22c55e55;
+      --red: #ef4444;
+      --amber: #f59e0b;
+      --blue: #3b82f6;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: 'SF Pro Display', system-ui, -apple-system, sans-serif; }
+
+    /* SCREENS */
+    .screen { position: fixed; inset: 0; display: flex; flex-direction: column; transition: opacity .2s; }
+    .screen.hidden { opacity: 0; pointer-events: none; }
+
+    /* ══════════════════════════════════
+       JOIN SCREEN
+    ══════════════════════════════════ */
+    #joinScreen {
+      align-items: center; justify-content: center; gap: 20px; padding: 32px 28px;
+      background: var(--bg);
+    }
+    .logo {
+      font-size: 1.7rem; font-weight: 900; letter-spacing: -1.5px;
+      color: var(--text); display: flex; align-items: center; gap: 10px;
+    }
+    .logo-icon {
+      width: 44px; height: 44px; background: var(--green); border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.2rem; flex-shrink: 0;
+      box-shadow: var(--green-glow);
+    }
+    .logo-sub { font-size: .7rem; color: var(--muted); letter-spacing: .15em; text-transform: uppercase; }
+
+    .join-card {
+      width: 100%; max-width: 380px; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 20px; padding: 24px;
+      display: flex; flex-direction: column; gap: 18px;
+    }
+    .join-label { font-size: .7rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; margin-bottom: 6px; }
+    input[type="text"] {
+      width: 100%; background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 10px; color: var(--text); font-size: 1rem; padding: 13px 16px;
+      outline: none;
+    }
+    input[type="text"]:focus { border-color: var(--green); box-shadow: 0 0 0 3px #22c55e18; }
+    input::placeholder { color: var(--muted); }
+
+    .channel-select { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .ch-btn {
+      padding: 11px 8px; border-radius: 9px; border: 1.5px solid var(--border);
+      background: var(--surface2); color: var(--text2); font-size: .82rem; font-weight: 600;
+      cursor: pointer; text-align: center; transition: all .15s;
+    }
+    .ch-btn.selected { border-color: var(--green); background: var(--green-dim); color: var(--green); }
+
+    .btn-join {
+      width: 100%; padding: 15px; border-radius: 12px;
+      background: var(--green); color: #000; font-size: 1rem; font-weight: 800;
+      border: none; cursor: pointer; transition: all .15s; letter-spacing: .01em;
+      box-shadow: var(--green-glow);
+    }
+    .btn-join:active { transform: scale(.98); }
+    .btn-join:disabled { background: var(--surface3); color: var(--muted); cursor: default; box-shadow: none; }
+
+    /* ══════════════════════════════════
+       MAIN SCREEN
+    ══════════════════════════════════ */
+    #mainScreen { background: var(--bg); }
+
+    /* TOP BAR */
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 16px; height: 52px;
+      border-bottom: 1px solid var(--border); flex-shrink: 0;
+      background: var(--surface);
+    }
+    .topbar-brand { display: flex; align-items: center; gap: 8px; }
+    .topbar-logo {
+      width: 28px; height: 28px; background: var(--green); border-radius: 7px;
+      display: flex; align-items: center; justify-content: center; font-size: .8rem;
+    }
+    .topbar-name { font-size: .9rem; font-weight: 800; letter-spacing: -.3px; }
+    .topbar-center { flex: 1; display: flex; justify-content: center; }
+    .conn-badge {
+      display: flex; align-items: center; gap: 5px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 20px; padding: 4px 10px; font-size: .7rem; color: var(--muted);
+    }
+    .conn-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--green); }
+    .conn-dot.off { background: var(--red); }
+    .conn-badge.live { border-color: #22c55e44; background: var(--green-dim); color: var(--green); }
+    .topbar-right { display: flex; gap: 6px; }
+    .icon-btn {
+      width: 34px; height: 34px; border-radius: 9px; background: var(--surface2);
+      border: 1px solid var(--border); color: var(--text2); font-size: .9rem; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; transition: all .15s;
+    }
+    .icon-btn:active { background: var(--surface3); }
+
+    /* CHANNEL LIST — left sidebar style on wide, top strip on mobile */
+    .channel-strip {
+      display: flex; gap: 6px; padding: 10px 14px; overflow-x: auto;
+      border-bottom: 1px solid var(--border); flex-shrink: 0;
+      scrollbar-width: none; background: var(--surface);
+    }
+
+    /* MONITORING CONTROLS */
+    .monitoring-controls {
+      padding: 10px 14px; border-bottom: 1px solid var(--border);
+      background: var(--surface2);
+    }
+    .monitoring-title {
+      font-size: .7rem; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .1em; margin-bottom: 8px;
+      display: flex; align-items: center; gap: 6px;
+      justify-content: space-between;
+    }
+    .toggle-switch {
+      position: relative; display: inline-block; width: 40px; height: 22px;
+    }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+      background: var(--surface3); transition: .3s; border-radius: 22px;
+      border: 1px solid var(--border);
+    }
+    .slider:before {
+      position: absolute; content: ""; height: 16px; width: 16px;
+      left: 3px; bottom: 2px; background: var(--text2);
+      transition: .3s; border-radius: 50%;
+    }
+    input:checked + .slider { background: var(--green-dim); border-color: var(--green); }
+    input:checked + .slider:before { transform: translateX(18px); background: var(--green); }
+    .channel-controls {
+      display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px;
+    }
+    .channel-control {
+      display: flex; align-items: center; gap: 8px; padding: 6px 8px;
+      background: var(--surface); border-radius: 8px; border: 1px solid var(--border);
+    }
+    .channel-name {
+      flex: 1; font-size: .75rem; font-weight: 700; color: var(--text);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .channel-color-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+    }
+    .channel-buttons {
+      display: flex; gap: 4px;
+    }
+    .channel-btn {
+      padding: 3px 8px; border-radius: 4px; border: 1px solid var(--border);
+      background: var(--surface2); color: var(--text2); font-size: .65rem;
+      cursor: pointer; transition: all .15s; font-weight: 600;
+      min-width: 32px; text-align: center;
+    }
+    .channel-btn.listen.active {
+      background: #3b82f622; border-color: #3b82f6; color: #3b82f6;
+    }
+    .channel-btn.talk.active {
+      background: #22c55e22; border-color: #22c55e; color: #22c55e;
+    }
+    .director-actions {
+      display: flex; gap: 8px; justify-content: center;
+    }
+    .monitor-ch-btn {
+      padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border);
+      background: var(--surface); color: var(--text2); font-size: .7rem;
+      cursor: pointer; transition: all .15s; display: flex; align-items: center; gap: 4px;
+    }
+    .monitor-ch-btn.active {
+      border-color: var(--green); background: var(--green-dim); color: var(--green);
+    }
+    .monitor-ch-btn .dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+    .sound-toggle {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 14px; border-top: 1px solid var(--border);
+      background: var(--surface2);
+    }
+    .sound-label {
+      font-size: .7rem; font-weight: 600; color: var(--text2);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .channel-strip::-webkit-scrollbar { display: none; }
+    .ch-pill {
+      flex-shrink: 0; padding: 6px 14px; border-radius: 8px;
+      border: 1.5px solid transparent; background: var(--surface2);
+      font-size: .78rem; font-weight: 700; cursor: pointer; transition: all .15s;
+      position: relative; letter-spacing: .02em; color: var(--text2);
+    }
+    .ch-pill.active {
+      border-color: var(--green); background: var(--green-dim);
+      color: var(--green); box-shadow: var(--green-glow);
+    }
+    .ch-pill .badge {
+      position: absolute; top: -5px; right: -5px; background: var(--green);
+      color: #000; font-size: .55rem; font-weight: 900; min-width: 16px; height: 16px;
+      border-radius: 8px; display: flex; align-items: center; justify-content: center;
+      padding: 0 3px;
+    }
+
+    /* ACTIVITY LOG */
+    .activity {
+      flex: 1; overflow-y: auto; padding: 10px 12px;
+      display: flex; flex-direction: column; gap: 4px;
+      scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+    }
+    .activity-entry {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 12px; border-radius: 9px; background: var(--surface);
+      border: 1px solid transparent;
+      animation: fadeIn .15s ease;
+    }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(3px); } to { opacity:1; transform:none; } }
+    .activity-entry.speaking {
+      background: var(--green-dim); border-color: #22c55e33;
+      box-shadow: var(--green-glow);
+    }
+    .entry-initial {
+      width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center;
+      justify-content: center; font-size: .8rem; font-weight: 800; flex-shrink: 0;
+      font-family: monospace; letter-spacing: -.5px;
+    }
+    .entry-body { flex: 1; min-width: 0; }
+    .entry-name { font-size: .82rem; font-weight: 700; color: var(--text); }
+    .entry-sub { font-size: .72rem; color: var(--muted); display: flex; align-items: center; gap: 5px; margin-top: 1px; }
+    .entry-time { font-size: .66rem; color: var(--muted); flex-shrink: 0; font-variant-numeric: tabular-nums; }
+    .speaking-wave { display: flex; gap: 2px; align-items: center; height: 12px; }
+    .wave-bar { width: 2.5px; background: var(--green); border-radius: 2px; animation: wave .5s ease infinite; }
+    .wave-bar:nth-child(2) { animation-delay: .1s; }
+    .wave-bar:nth-child(3) { animation-delay: .2s; }
+    @keyframes wave { 0%,100%{height:3px} 50%{height:12px} }
+    .on-air-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse-dot 1s ease infinite; }
+    @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+    /* PTT BUTTON */
+    .ptt-zone {
+      padding: 16px 20px 36px; flex-shrink: 0;
+      display: flex; flex-direction: column; align-items: center; gap: 10px;
+      background: var(--surface); border-top: 1px solid var(--border);
+    }
+    .ptt-ch-label {
+      display: flex; align-items: center; gap: 7px;
+      font-size: .72rem; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .1em;
+    }
+    .ptt-ch-dot { width: 7px; height: 7px; border-radius: 50%; }
+    .ptt-btn {
+      width: 148px; height: 148px; border-radius: 50%;
+      background: var(--surface2);
+      border: 3px solid var(--border2);
+      box-shadow: 0 4px 24px #0008, inset 0 1px 0 #ffffff08;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 6px; cursor: pointer; transition: all .08s; user-select: none;
+      touch-action: none; position: relative;
+    }
+    .ptt-btn::after {
+      content: ''; position: absolute; inset: 6px; border-radius: 50%;
+      border: 1px solid var(--border); pointer-events: none;
+    }
+    .ptt-btn:active, .ptt-btn.pressed {
+      background: var(--green-dim);
+      border-color: var(--green);
+      box-shadow: var(--green-glow), 0 4px 24px #0008;
+      transform: scale(.96);
+    }
+    .ptt-btn.pressed::after { border-color: #22c55e44; }
+    .ptt-mic-icon {
+      font-size: 2.4rem; line-height: 1;
+      filter: drop-shadow(0 0 8px #22c55e00);
+      transition: filter .08s;
+    }
+    .ptt-btn.pressed .ptt-mic-icon { filter: drop-shadow(0 0 8px #22c55e88); }
+    .ptt-text {
+      font-size: .65rem; font-weight: 800; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .12em;
+    }
+    .ptt-btn.pressed .ptt-text { color: var(--green); }
+
+    /* BOTTOM HINT */
+    .ptt-hint {
+      font-size: .65rem; color: var(--muted); text-align: center;
+      display: flex; gap: 12px; align-items: center;
+    }
+    .hint-key {
+      background: var(--surface3); border: 1px solid var(--border2);
+      border-radius: 5px; padding: 2px 7px; font-family: monospace; font-size: .65rem;
+    }
+    .ptt-mode-toggle {
+      display: flex; align-items: center; gap: 6px; cursor: pointer;
+    }
+    .slider-small {
+      position: relative; display: inline-block; width: 32px; height: 18px;
+    }
+    .slider-small input { opacity: 0; width: 0; height: 0; }
+    .slider-small:before {
+      position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+      background: var(--surface3); transition: .3s; border-radius: 18px;
+      border: 1px solid var(--border);
+      content: "";
+    }
+    .slider-small:after {
+      position: absolute; content: ""; height: 12px; width: 12px;
+      left: 3px; bottom: 2px; background: var(--text2);
+      transition: .3s; border-radius: 50%;
+    }
+    input:checked + .slider-small:after { transform: translateX(14px); background: var(--green); }
+    input:checked + .slider-small { background: var(--green-dim); border-color: var(--green); }
+    .ptt-mode-label {
+      font-size: .65rem; font-weight: 600; color: var(--text2);
+    }
+
+    /* CALL BUTTON */
+    .ptt-actions { display: flex; gap: 14px; align-items: center; }
+    .call-btn {
+      width: 52px; height: 52px; border-radius: 50%;
+      background: var(--surface2); border: 1.5px solid var(--border2);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.3rem; cursor: pointer; transition: all .15s;
+      flex-shrink: 0;
+    }
+    .call-btn:active { transform: scale(.92); background: #f59e0b22; border-color: var(--amber); }
+    .call-btn.calling { border-color: var(--amber); background: #f59e0b22; animation: call-pulse .6s ease infinite; }
+    .call-btn.ringing { border-color: #ef4444; background: #ef444422; animation: ring-pulse .4s ease infinite; }
+    @keyframes call-pulse { 0%,100%{box-shadow:0 0 0 0 #f59e0b44} 50%{box-shadow:0 0 0 10px #f59e0b00} }
+    @keyframes ring-pulse { 0%,100%{box-shadow:0 0 0 0 #ef444466} 50%{box-shadow:0 0 0 8px #ef444400} }
+
+    /* RING ALERT — clignotement global quand quelqu'un appelle */
+    @keyframes ring-flash { 0%,100%{opacity:1} 50%{opacity:0} }
+    .ringing { animation: ring-flash .3s ease infinite; }
+    #ringAlert {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      background: var(--amber); color: #000;
+      padding: 10px 16px; font-size: .85rem; font-weight: 800;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      transform: translateY(-100%); transition: transform .2s;
+    }
+    #ringAlert.show { transform: translateY(0); }
+    .ring-dismiss { margin-left: 12px; background: #0002; border: none; border-radius: 6px; padding: 4px 10px; font-size: .78rem; font-weight: 700; cursor: pointer; }
+
+    /* ══════════════════════════════════
+       PANELS
+    ══════════════════════════════════ */
+    #usersPanel {
+      position: fixed; inset: 0; background: #000c; z-index: 50;
+      display: flex; align-items: flex-end;
+      backdrop-filter: blur(4px);
+    }
+    #usersPanel.hidden { display: none; }
+    .users-sheet {
+      width: 100%; background: var(--surface); border-radius: 20px 20px 0 0;
+      border-top: 1px solid var(--border2);
+      padding: 8px 0 40px; max-height: 72vh; overflow-y: auto;
+    }
+    .sheet-handle {
+      width: 36px; height: 4px; background: var(--border2); border-radius: 2px;
+      margin: 10px auto 16px;
+    }
+    .sheet-title {
+      font-size: .95rem; font-weight: 800; padding: 0 18px 12px;
+      display: flex; justify-content: space-between; align-items: center;
+      border-bottom: 1px solid var(--border);
+    }
+    .sheet-close {
+      width: 28px; height: 28px; border-radius: 50%; background: var(--surface2);
+      border: none; color: var(--muted); font-size: .8rem; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .ch-group { padding: 12px 18px; border-bottom: 1px solid var(--border); }
+    .ch-group:last-child { border-bottom: none; }
+    .ch-group-header {
+      display: flex; align-items: center; gap: 8px;
+      font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .1em;
+      color: var(--muted); margin-bottom: 8px;
+    }
+    .ch-group-dot { width: 7px; height: 7px; border-radius: 50%; }
+    .user-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; }
+    .user-row-avatar {
+      width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center;
+      justify-content: center; font-size: .75rem; font-weight: 800; flex-shrink: 0;
+      font-family: monospace;
+    }
+    .user-row-name { font-size: .875rem; font-weight: 500; }
+    .user-me { font-size: .65rem; color: var(--muted); margin-left: 4px; }
+
+    /* QR PANEL */
+    #qrPanel {
+      position: fixed; inset: 0; background: #000c; z-index: 50;
+      display: flex; align-items: center; justify-content: center; padding: 24px;
+      backdrop-filter: blur(4px);
+    }
+    #qrPanel.hidden { display: none; }
+    .qr-sheet {
+      background: var(--surface); border-radius: 20px; border: 1px solid var(--border2);
+      padding: 28px 24px; text-align: center; max-width: 320px; width: 100%;
+    }
+    .qr-title { font-size: 1rem; font-weight: 800; margin-bottom: 4px; }
+    .qr-sub { font-size: .78rem; color: var(--muted); margin-bottom: 20px; line-height: 1.5; }
+    #qrImage { width: 200px; height: 200px; border-radius: 12px; margin: 0 auto 14px; display: block; background: var(--surface2); }
+    .qr-url {
+      font-size: .72rem; color: var(--muted); word-break: break-all;
+      background: var(--surface2); border-radius: 8px; padding: 8px 10px;
+      font-family: monospace;
+    }
+    .btn-close {
+      margin-top: 16px; width: 100%; padding: 13px; border-radius: 12px;
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text2); font-size: .875rem; font-weight: 600; cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+<!-- JOIN SCREEN -->
+<div class="screen" id="joinScreen">
+  <div class="logo">
+    <div class="logo-icon">🎙️</div>
+    DewiCom
+  </div>
+  <div class="logo-sub">Intercom WiFi · Sans cloud · Sans friction</div>
+
+  <div class="join-card">
+    <div>
+      <div class="join-label">Ton nom ou poste</div>
+      <input type="text" id="nameInput" placeholder="FOH, Régie, Plateau…" maxlength="20" />
+    </div>
+
+    <div>
+      <div class="join-label">Canal de départ</div>
+      <div class="channel-select" id="channelSelect"></div>
+    </div>
+
+    <button class="btn-join" id="joinBtn" disabled>Rejoindre la session →</button>
+  </div>
+</div>
+
+<!-- RING ALERT -->
+<div id="ringAlert">
+  <span id="ringAlertText">📞 Appel entrant</span>
+  <button class="ring-dismiss" onclick="dismissRing()">OK</button>
+</div>
+
+<!-- MAIN SCREEN -->
+<div class="screen hidden" id="mainScreen">
+  <div class="topbar">
+    <div class="topbar-brand">
+      <div class="topbar-logo">🎙️</div>
+      <div class="topbar-name" id="topUserName">—</div>
+    </div>
+    <div class="topbar-center">
+      <div class="conn-badge" id="connBadge">
+        <div class="conn-dot off" id="connDot"></div>
+        <span id="connLabel">Connexion…</span>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <button class="icon-btn" id="usersBtn" title="Participants">👥</button>
+      <button class="icon-btn" id="qrBtn" title="QR Code">⬡</button>
+    </div>
+  </div>
+
+  <div class="monitoring-controls">
+    <div class="monitoring-title">
+      <span>🎧</span> Director Mode
+      <label class="toggle-switch">
+        <input type="checkbox" id="directorModeToggle">
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div class="director-hint" id="directorHint" style="display:none; font-size:.65rem;color:var(--muted);margin-bottom:6px;">
+      💡 🎙️ active automatiquement 🎧 (écoute)
+    </div>
+    <div class="channel-controls" id="channelControls" style="display:none"></div>
+    <div class="director-actions" id="directorActions" style="display:none">
+      <button class="monitor-ch-btn" id="directorBtn">
+        <div class="dot"></div>Tout activer
+      </button>
+      <button class="monitor-ch-btn" id="clearBtn">
+        <div class="dot"></div>Tout désactiver
+      </button>
+    </div>
+    <div class="sound-toggle">
+      <label class="sound-label">🔔 Sonnerie appels</label>
+      <label class="toggle-switch">
+        <input type="checkbox" id="ringSoundToggle" checked>
+        <span class="slider"></span>
+      </label>
+    </div>
+  </div>
+
+  <div class="channel-strip" id="channelStrip"></div>
+
+  <div class="activity" id="activity"></div>
+
+  <div class="ptt-zone">
+    <div class="ptt-ch-label">
+      <div class="ptt-ch-dot" id="pttChDot"></div>
+      <span id="pttLabel">Général</span>
+    </div>
+    <div class="ptt-actions">
+      <button class="call-btn" id="callBtn" title="Appeler le canal">📞</button>
+      <div class="ptt-btn" id="pttBtn">
+        <div class="ptt-mic-icon">🎙️</div>
+        <div class="ptt-text">Maintenir pour parler</div>
+      </div>
+      <div style="width:52px"></div>
+    </div>
+    <div class="ptt-hint">
+      <span>Mobile : appui long</span>
+      <span>·</span>
+      <span>Clavier : <span class="hint-key">Espace</span> <span class="hint-key">Enter</span> <span class="hint-key">Z</span> <span class="hint-key">X</span></span>
+      <span>·</span>
+      <span>Kit filaire : <span class="hint-key">Play/Pause</span> <span class="hint-key">Next</span> <span class="hint-key">Prev</span></span>
+      <span>·</span>
+      <label class="ptt-mode-toggle">
+        <input type="checkbox" id="pttModeToggle" checked>
+        <span class="slider-small"></span>
+        <span class="ptt-mode-label">PTT</span>
+      </label>
+    </div>
+  </div>
+</div>
+
+<!-- USERS PANEL -->
+<div id="usersPanel" class="hidden">
+  <div class="users-sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">
+      Participants en ligne
+      <button class="sheet-close" id="closeUsers">✕</button>
+    </div>
+    <div id="usersList"></div>
+  </div>
+</div>
+
+<!-- QR PANEL -->
+<div id="qrPanel" class="hidden">
+  <div class="qr-sheet">
+    <div class="qr-title">Rejoindre DewiCom</div>
+    <div class="qr-sub">Scanner ce QR code depuis n'importe quel appareil sur le même WiFi</div>
+    <img id="qrImage" src="" alt="QR Code" />
+    <div class="qr-url" id="qrUrl"></div>
+    <button class="btn-close" id="closeQr">Fermer</button>
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+// ── CONFIG ──
+const CHANNELS_DEFAULT = [
+  { id: "general", name: "Général",   color: "#6b7280" },
+  { id: "foh",     name: "FOH Son",   color: "#3b82f6" },
+  { id: "plateau", name: "Plateau",   color: "#f97316" },
+  { id: "lumiere", name: "Lumière",   color: "#a855f7" },
+  { id: "regie",   name: "Régie",     color: "#22c55e" },
+];
+
+let socket = null;
+let myName = "";
+let myChannel = "general";
+let channels = [...CHANNELS_DEFAULT];
+let channelState = {};
+let mediaStream = null;
+let audioCtx = null;
+let processor = null;
+let speaking = false;
+// Director mode: état par canal { channelId: { listen: boolean, talk: boolean } }
+let channelStates = {};
+let directorMode = false;
+let ringSoundEnabled = true;
+let pttMode = true; // true = PTT, false = Toggle
+let allPttKeys = ["Space", "Enter", "KeyZ", "KeyX", "MediaPlayPause", "MediaTrackNext", "MediaTrackPrevious", "MediaStop"];
+let mediaKeyState = {}; // Pour suivre l'état des touches multimédia
+
+// ── JOIN SCREEN ──
+const nameInput = document.getElementById("nameInput");
+const joinBtn   = document.getElementById("joinBtn");
+const channelSelect = document.getElementById("channelSelect");
+
+function renderChannelSelect() {
+  channelSelect.innerHTML = "";
+  channels.forEach(ch => {
+    const btn = document.createElement("div");
+    btn.className = "ch-btn" + (ch.id === myChannel ? " selected" : "");
+    btn.textContent = ch.name;
+    btn.style.setProperty("--ch-color", ch.color);
+    btn.onclick = () => {
+      myChannel = ch.id;
+      renderChannelSelect();
+    };
+    if (ch.id === myChannel) btn.style.borderColor = ch.color;
+    channelSelect.appendChild(btn);
+  });
+}
+// Restore from localStorage
+const savedName = localStorage.getItem("dewicom-name");
+const savedChannel = localStorage.getItem("dewicom-channel");
+if (savedName) {
+  nameInput.value = savedName;
+  joinBtn.disabled = false;
+}
+if (savedChannel) {
+  myChannel = savedChannel;
+}
+renderChannelSelect();
+
+nameInput.addEventListener("input", () => {
+  joinBtn.disabled = nameInput.value.trim().length < 1;
+});
+
+joinBtn.addEventListener("click", startSession);
+
+// ── CONNECTED STATE ──
+function setConnected(ok) {
+  document.getElementById("connDot").className = "conn-dot" + (ok ? "" : " off");
+  document.getElementById("connLabel").textContent = ok ? "En ligne" : "Hors ligne";
+}
+
+// ── START SESSION ──
+async function startSession() {
+  myName = nameInput.value.trim();
+  if (!myName) return;
+  localStorage.setItem("dewicom-name", myName);
+  localStorage.setItem("dewicom-channel", myChannel);
+
+  // Request mic permission — mode écoute seule si pas de micro
+  let listenOnly = false;
+  try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.isSecureContext) {
+      listenOnly = true;
+    } else {
+      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        sampleRate: 16000,
+      }});
+    }
+  } catch(e) {
+    console.warn("[Micro]", e.name, e.message);
+    if (e.name === "NotAllowedError" || e.name === "PermissionDeniedError") {
+      showMicError("Permission micro refusée par le navigateur.<br><strong>Clique sur l'icône 🔒 dans la barre d'adresse → Autoriser le microphone → Recharger.</strong>");
+      return;
+    }
+    // NotFoundError, OverconstrainedError, etc. → mode écoute seule
+    listenOnly = true;
+  }
+  if (listenOnly) {
+    console.warn("[Micro] Pas de micro détecté — mode écoute seule");
+    const banner = document.getElementById("micError");
+    if (banner) {
+      banner.innerHTML = "🔇 Aucun micro — mode <strong>écoute seule</strong>";
+      banner.style.display = "block";
+      banner.style.background = "#5a3e00";
+      banner.style.color = "#ffd580";
+    }
+  }
+
+  // Connect socket
+  socket = io({ transports: ["websocket"] });
+
+  socket.on("connect", () => {
+    setConnected(true);
+    document.getElementById("connBadge")?.classList.add("live");
+    if (directorMode) {
+      const listenChannels = Object.keys(channelStates).filter(id => channelStates[id]?.listen);
+      const talkChannels = Object.keys(channelStates).filter(id => channelStates[id]?.talk);
+      socket.emit("join", { name: myName, channel: myChannel, listenChannels, talkChannels });
+    } else {
+      socket.emit("join", { name: myName, channel: myChannel });
+    }
+  });
+
+  socket.on("disconnect", () => { setConnected(false); document.getElementById("connBadge")?.classList.remove("live"); });
+
+  socket.on("channels-init", (chs) => {
+    channels = chs;
+    renderChannelStrip();
+    renderMonitoringControls();
+    renderChannelSelect();
+  });
+
+  socket.on("channel-state", (state) => {
+    channelState = state;
+    renderChannelStrip();
+    if (document.getElementById("usersPanel").classList.contains("hidden") === false) {
+      renderUsersList();
+    }
+  });
+
+  socket.on("audio-chunk", ({ from, chunk }) => {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+    playChunk(chunk);
+  });
+
+  socket.on("ptt-state", ({ from, fromId, channel, speaking: isSpeaking }) => {
+    if (fromId === socket.id) return;
+    updateSpeakingEntry(fromId, from, channel, isSpeaking);
+  });
+
+  socket.on("user-joined", ({ name, channel }) => {
+    addActivityEntry(`${name} a rejoint ${getChannelName(channel)}`, "🟢", "#22c55e");
+  });
+
+  socket.on("user-left", ({ name, channel }) => {
+    addActivityEntry(`${name} a quitté ${getChannelName(channel)}`, "🔴", "#ef4444");
+  });
+
+  socket.on("call-ring", ({ from, channel }) => {
+    showRingAlert(from, channel);
+    addActivityEntry(`${from} appelle — ${getChannelName(channel)}`, "📞", "#f59e0b");
+  });
+
+  // Show main screen
+  document.getElementById("joinScreen").classList.add("hidden");
+  document.getElementById("mainScreen").classList.remove("hidden");
+  document.getElementById("topUserName").textContent = myName;
+  renderChannelStrip();
+  renderMonitoringControls();
+  setupCall();
+  
+  // Initialiser PTT quand le DOM est prêt
+  requestAnimationFrame(() => {
+    setupPTT();
+  });
+
+  
+  // Director mode toggle
+  document.getElementById("directorModeToggle").addEventListener("change", (e) => {
+    directorMode = e.target.checked;
+    const controls = document.getElementById("channelControls");
+    const actions = document.getElementById("directorActions");
+    const hint = document.getElementById("directorHint");
+    
+    if (directorMode) {
+      controls.style.display = "flex";
+      actions.style.display = "flex";
+      hint.style.display = "block";
+      addActivityEntry("Mode Director activé", "🎧", "#3b82f6");
+    } else {
+      controls.style.display = "none";
+      actions.style.display = "none";
+      hint.style.display = "none";
+      // Reset channel states when exiting Director mode
+      channelStates = {};
+      socket?.emit("update-listen-channels", { listenChannels: [] });
+      socket?.emit("update-talk-channels", { talkChannels: [] });
+      // Forcer le retour au mode normal côté serveur
+      socket?.emit("switch-channel", { channel: myChannel });
+      updatePTTLabel();
+      addActivityEntry("Mode Director désactivé", "🔇", "#ef4444");
+    }
+  });
+
+  // Director/Clear handlers
+  document.getElementById("directorBtn").addEventListener("click", () => {
+    const allChannelIds = channels.map(ch => ch.id);
+    allChannelIds.forEach(id => {
+      channelStates[id] = { listen: true, talk: true };
+    });
+    const listenChannels = allChannelIds;
+    const talkChannels = allChannelIds;
+    socket?.emit("update-listen-channels", { listenChannels });
+    socket?.emit("update-talk-channels", { talkChannels });
+    renderMonitoringControls();
+    updatePTTLabel();
+    addActivityEntry("Mode Director complet — écoute et parle sur tous les canaux", "🎧", "#22c55e");
+  });
+
+  document.getElementById("clearBtn").addEventListener("click", () => {
+    const allChannelIds = channels.map(ch => ch.id);
+    allChannelIds.forEach(id => {
+      channelStates[id] = { listen: false, talk: false };
+    });
+    socket?.emit("update-listen-channels", { listenChannels: [] });
+    socket?.emit("update-talk-channels", { talkChannels: [] });
+    renderMonitoringControls();
+    updatePTTLabel();
+    addActivityEntry("Tous les canaux désactivés", "🔇", "#ef4444");
+  });
+
+  // Ring sound toggle
+  document.getElementById("ringSoundToggle").addEventListener("change", (e) => {
+    ringSoundEnabled = e.target.checked;
+    addActivityEntry(ringSoundEnabled ? "Sonnerie activée" : "Sonnerie désactivée", "🔔", "#f59e0b");
+  });
+
+  // PTT mode toggle
+  document.getElementById("pttModeToggle").addEventListener("change", (e) => {
+    pttMode = !e.target.checked; // Inversion : switch OFF = PTT, switch ON = Toggle
+    const label = document.querySelector(".ptt-mode-label");
+    const text = document.querySelector(".ptt-text");
+    label.textContent = pttMode ? "PTT" : "Toggle";
+    text.textContent = pttMode ? "Maintenir pour parler" : "Cliquer pour parler";
+    
+    // Reconfigurer les listeners PTT selon le nouveau mode
+    if (window.updatePTTMode) {
+      window.updatePTTMode();
+    }
+    
+    addActivityEntry(pttMode ? "Mode PTT activé" : "Mode Toggle activé", "🎙️", "#3b82f6");
+  });
+}
+
+// ── AUDIO ──
+let nextPlayTime = 0;
+
+function setupAudioProcessor() {
+  if (!mediaStream) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000, latencyHint: "interactive" });
+  const source = audioCtx.createMediaStreamSource(mediaStream);
+  processor = audioCtx.createScriptProcessor(512, 1, 1);
+  source.connect(processor);
+  processor.connect(audioCtx.destination);
+  processor.onaudioprocess = (e) => {
+    if (!speaking) return;
+    const input = e.inputBuffer.getChannelData(0);
+    const int16 = floatTo16BitPCM(input);
+    if (directorMode) {
+      const activeTalkChannels = getAllTalkChannels();
+      if (activeTalkChannels.length > 0) {
+        // Envoyer sur tous les canaux de parole actifs
+        activeTalkChannels.forEach(channelId => {
+          socket.emit("audio-chunk", { channel: channelId, chunk: int16.buffer }, { binary: true });
+        });
+      }
+    } else {
+      // Mode normal : canal actif
+      socket.emit("audio-chunk", { channel: myChannel, chunk: int16.buffer }, { binary: true });
+    }
+  };
+}
+
+function floatTo16BitPCM(float32Array) {
+  const buffer = new Int16Array(float32Array.length);
+  for (let i = 0; i < float32Array.length; i++) {
+    buffer[i] = Math.max(-32768, Math.min(32767, float32Array[i] * 32768));
+  }
+  return buffer;
+}
+
+async function playChunk(data) {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000, latencyHint: "interactive" });
+  if (audioCtx.state === "suspended") await audioCtx.resume();
+
+  // Normalise tous les formats possibles vers Int16Array
+  let int16;
+  if (data instanceof ArrayBuffer) {
+    // Cas nominal : ArrayBuffer direct
+    int16 = new Int16Array(data);
+  } else if (data instanceof Int16Array) {
+    int16 = data;
+  } else if (ArrayBuffer.isView(data)) {
+    // Uint8Array, Buffer-like → reinterprète comme Int16
+    int16 = new Int16Array(data.buffer, data.byteOffset, Math.floor(data.byteLength / 2));
+  } else if (Array.isArray(data)) {
+    // Array de bytes (uint8) → reconstitue ArrayBuffer puis Int16Array
+    const uint8 = new Uint8Array(data);
+    int16 = new Int16Array(uint8.buffer);
+  } else if (data && typeof data === "object") {
+    // Objet indexé {0:x, 1:y, ...} = bytes uint8 sérialisés par Socket.io
+    const bytes = Object.values(data);
+    const uint8 = new Uint8Array(bytes);
+    int16 = new Int16Array(uint8.buffer);
+  } else {
+    console.warn("[playChunk] format inconnu:", typeof data, data);
+    return;
+  }
+  const float32 = new Float32Array(int16.length);
+  for (let i = 0; i < int16.length; i++) float32[i] = int16[i] / 32768;
+  const buffer = audioCtx.createBuffer(1, float32.length, 16000);
+  buffer.copyToChannel(float32, 0);
+  const source = audioCtx.createBufferSource();
+  source.buffer = buffer;
+  source.connect(audioCtx.destination);
+  // Sequential scheduling to prevent gaps and overlaps
+  const now = audioCtx.currentTime;
+  if (nextPlayTime < now) nextPlayTime = now + 0.02;
+  source.start(nextPlayTime);
+  nextPlayTime += buffer.duration;
+}
+
+
+// ── PTT GLOBAL FUNCTIONS ──
+function pttStart() {
+  if (speaking) return;
+  
+  speaking = true;
+  const currentBtn = document.getElementById("pttBtn");
+  if (currentBtn) {
+    currentBtn.classList.add("pressed");
+  }
+  
+  if (!socket) return;
+  
+  if (directorMode) {
+    const activeTalkChannels = getAllTalkChannels();
+    if (activeTalkChannels.length > 0) {
+      activeTalkChannels.forEach(channelId => {
+        socket.emit("ptt-start", { channel: channelId });
+      });
+    }
+  } else {
+    socket.emit("ptt-start", { channel: myChannel });
+  }
+}
+
+function pttStop() {
+  if (!speaking) return;
+  speaking = false;
+  const currentBtn = document.getElementById("pttBtn");
+  if (currentBtn) currentBtn.classList.remove("pressed");
+  if (directorMode) {
+    const activeTalkChannels = getAllTalkChannels();
+    if (activeTalkChannels.length > 0) {
+      activeTalkChannels.forEach(channelId => {
+        socket.emit("ptt-stop", { channel: channelId });
+      });
+    }
+  } else {
+    socket.emit("ptt-stop", { channel: myChannel });
+  }
+}
+
+function pttToggle() {
+  if (speaking) {
+    pttStop();
+  } else {
+    pttStart();
+  }
+}
+
+// ── PTT SETUP ──
+function setupPTT() {
+  setupAudioProcessor();
+  const btn = document.getElementById("pttBtn");
+  
+  // Si le bouton n'est pas encore dans le DOM, réessayer plus tard
+  if (!btn) {
+    console.warn("PTT button not found, retrying...");
+    setTimeout(setupPTT, 50);
+    return;
+  }
+
+  // pttToggle est maintenant globale
+
+  // Configurer les listeners selon le mode
+  function setupPTTListeners() {
+    const currentBtn = document.getElementById("pttBtn");
+    
+    // Si le bouton n'est pas dans le DOM, réessayer plus tard
+    if (!currentBtn || !currentBtn.parentNode) {
+      console.warn("PTT button not found for mode change, retrying...");
+      setTimeout(setupPTTListeners, 50);
+      return;
+    }
+    
+    // Supprimer tous les listeners existants en recréant le bouton
+    const newBtn = currentBtn.cloneNode(true);
+    currentBtn.parentNode.replaceChild(newBtn, currentBtn);
+    
+    if (pttMode) {
+      // Mode PTT : maintenir pour parler
+      newBtn.addEventListener("mousedown", pttStart);
+      newBtn.addEventListener("touchstart", (e) => { e.preventDefault(); pttStart(); }, { passive: false });
+      newBtn.addEventListener("mouseup", pttStop);
+      newBtn.addEventListener("touchend", (e) => { e.preventDefault(); pttStop(); }, { passive: false });
+      newBtn.addEventListener("mouseleave", pttStop);
+    } else {
+      // Mode Toggle : cliquer pour parler/arrêter
+      newBtn.addEventListener("click", pttToggle);
+      newBtn.addEventListener("touchstart", (e) => { e.preventDefault(); pttToggle(); }, { passive: false });
+    }
+    
+    // Clavier : configurer selon le mode actuel
+    setupKeyboardListeners();
+  }
+
+  setupPTTListeners();
+  
+  // Mettre à jour les listeners quand le mode change
+  window.updatePTTMode = setupPTTListeners;
+}
+
+// Gestion des listeners clavier
+function setupKeyboardListeners() {
+  // Supprimer les anciens listeners clavier
+  const oldKeyDownHandler = window.pttKeyDownHandler;
+  const oldKeyUpHandler = window.pttKeyUpHandler;
+  
+  if (oldKeyDownHandler) {
+    document.removeEventListener("keydown", oldKeyDownHandler);
+  }
+  if (oldKeyUpHandler) {
+    document.removeEventListener("keyup", oldKeyUpHandler);
+  }
+  
+  // Codes clavier pour kits filaires et main libre
+  const pttKeys = ["Space", "Enter", "KeyZ", "KeyX"];
+  const mediaKeys = ["MediaPlayPause", "MediaTrackNext", "MediaTrackPrevious", "MediaStop"];
+  
+  // Créer les nouveaux handlers selon le mode
+  if (pttMode) {
+    // Mode PTT
+    window.pttKeyDownHandler = (e) => {
+      // FORCER MediaPlayPause directement
+      if (e.code === "MediaPlayPause") {
+        if (!mediaKeyState[e.code]) {
+          mediaKeyState[e.code] = true;
+          e.preventDefault(); 
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          pttStart(); 
+          addActivityEntry(`Kit filaire (MediaPlayPause) - PTT activé`, "🎧", "#3b82f6");
+        }
+        return;
+      }
+      
+      // Support spécial pour les autres touches multimédia
+      const isMediaKey = mediaKeys.includes(e.code);
+      const isPttKey = allPttKeys.includes(e.code) || isMediaKey;
+      
+      if (isMediaKey) {
+        if (mediaKeyState[e.code]) return;
+        mediaKeyState[e.code] = true;
+      }
+      
+      if (isPttKey && !e.repeat) { 
+        e.preventDefault(); 
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        pttStart(); 
+        const keyType = isMediaKey ? "Kit filaire" : "Kit main libre";
+        addActivityEntry(`${keyType} (${e.code}) - PTT activé`, "🎧", "#3b82f6");
+      }
+    };
+    window.pttKeyUpHandler = (e) => {
+      // FORCER MediaPlayPause directement
+      if (e.code === "MediaPlayPause") {
+        mediaKeyState[e.code] = false;
+        e.preventDefault(); 
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        pttStop(); 
+        addActivityEntry(`Kit filaire (MediaPlayPause) - PTT désactivé`, "🎧", "#6b7280");
+        return;
+      }
+      
+      const isMediaKey = mediaKeys.includes(e.code);
+      const isPttKey = allPttKeys.includes(e.code) || isMediaKey;
+      
+      // Réinitialiser l'état de la touche multimédia
+      if (isMediaKey) {
+        mediaKeyState[e.code] = false;
+      }
+      
+      if (isPttKey) { 
+        e.preventDefault(); 
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        pttStop(); 
+        const keyType = isMediaKey ? "Kit filaire" : "Kit main libre";
+        addActivityEntry(`${keyType} (${e.code}) - PTT désactivé`, "🎧", "#6b7280");
+      }
+    };
+  } else {
+    // Mode Toggle
+    window.pttKeyDownHandler = (e) => {
+      // FORCER MediaPlayPause directement en mode Toggle
+      if (e.code === "MediaPlayPause") {
+        if (!mediaKeyState[e.code]) {
+          mediaKeyState[e.code] = true;
+          e.preventDefault(); 
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          pttToggle(); 
+          addActivityEntry(`Kit filaire (MediaPlayPause) - Toggle`, "🎧", "#3b82f6");
+        }
+        return;
+      }
+      
+      const isMediaKey = mediaKeys.includes(e.code);
+      const isPttKey = allPttKeys.includes(e.code) || isMediaKey;
+      
+      // Debounce pour les touches multimédia
+      if (isMediaKey) {
+        if (mediaKeyState[e.code]) {
+          return;
+        }
+        mediaKeyState[e.code] = true;
+      }
+      
+      if (isPttKey && !e.repeat) { 
+        e.preventDefault(); 
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        pttToggle(); 
+        const keyType = isMediaKey ? "Kit filaire" : "Kit main libre";
+        addActivityEntry(`${keyType} (${e.code}) - Toggle`, "🎧", "#3b82f6");
+      }
+    };
+    // En mode Toggle, keyup complète l'action toggle
+    window.pttKeyUpHandler = (e) => {
+      // FORCER MediaPlayPause directement en mode Toggle (keyup complète l'action)
+      if (e.code === "MediaPlayPause") {
+        mediaKeyState[e.code] = false;
+        e.preventDefault(); 
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        addActivityEntry(`Kit filaire (MediaPlayPause) - Toggle complété`, "🎧", "#3b82f6");
+        return;
+      }
+      
+      const isMediaKey = mediaKeys.includes(e.code);
+      if (isMediaKey) {
+        mediaKeyState[e.code] = false;
+      }
+    };
+  }
+  
+  // Ajouter les nouveaux listeners
+  document.addEventListener("keydown", window.pttKeyDownHandler);
+  if (window.pttKeyUpHandler) {
+    document.addEventListener("keyup", window.pttKeyUpHandler);
+  }
+}
+
+// ── CHANNEL STRIP ──
+function renderMonitoringControls() {
+  const container = document.getElementById("channelControls");
+  container.innerHTML = "";
+  
+  channels.forEach(ch => {
+    const state = channelStates[ch.id] || { listen: false, talk: false };
+    const control = document.createElement("div");
+    control.className = "channel-control";
+    
+    control.innerHTML = `
+      <div class="channel-name">
+        <div class="channel-color-dot" style="background: ${ch.color}"></div>
+        ${ch.name}
+      </div>
+      <div class="channel-buttons">
+        <button class="channel-btn listen ${state.listen ? 'active' : ''}" data-channel="${ch.id}" data-action="listen">
+          🎧
+        </button>
+        <button class="channel-btn talk ${state.talk ? 'active' : ''}" data-channel="${ch.id}" data-action="talk">
+          🎙️
+        </button>
+      </div>
+    `;
+    
+    container.appendChild(control);
+  });
+  
+  // Update action buttons
+  const allListen = channels.every(ch => channelStates[ch.id]?.listen);
+  const allTalk = channels.every(ch => channelStates[ch.id]?.talk);
+  const directorBtn = document.getElementById("directorBtn");
+  const clearBtn = document.getElementById("clearBtn");
+  
+  directorBtn.className = "monitor-ch-btn" + (allListen && allTalk ? " active" : "");
+  clearBtn.className = "monitor-ch-btn" + (!allListen && !allTalk ? " active" : "");
+  
+  // Add event listeners
+  container.querySelectorAll('.channel-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const channelId = e.target.dataset.channel;
+      const action = e.target.dataset.action;
+      toggleChannelState(channelId, action);
+    });
+  });
+}
+
+function toggleChannelState(channelId, action) {
+  if (!channelStates[channelId]) {
+    channelStates[channelId] = { listen: false, talk: false };
+  }
+  
+  if (action === 'talk') {
+    // En mode Director, si on active le parlé, on active aussi l'écoute automatiquement
+    if (!channelStates[channelId].talk) {
+      channelStates[channelId].talk = true;
+      channelStates[channelId].listen = true;
+    } else {
+      channelStates[channelId].talk = false;
+      // On garde l'écoute même si on désactive le parlé
+    }
+  } else {
+    // Pour l'écoute, on toggle normalement
+    channelStates[channelId].listen = !channelStates[channelId].listen;
+  }
+  
+  // Envoyer les mises à jour au serveur
+  const listenChannels = Object.keys(channelStates).filter(id => channelStates[id].listen);
+  const talkChannels = Object.keys(channelStates).filter(id => channelStates[id].talk);
+  
+  socket?.emit("update-listen-channels", { listenChannels });
+  socket?.emit("update-talk-channels", { talkChannels });
+  
+  renderMonitoringControls();
+  updatePTTLabel();
+}
+
+function updatePTTLabel() {
+  if (directorMode) {
+    const talkChannels = Object.keys(channelStates).filter(id => channelStates[id]?.talk);
+    const activeTalkChannels = talkChannels.length ? talkChannels : [];
+    const channelNames = activeTalkChannels.map(id => {
+      const ch = channels.find(c => c.id === id);
+      return ch?.name || id;
+    });
+    document.getElementById("pttLabel").textContent = channelNames.length ? channelNames.join(' + ') : "Aucun canal";
+    const dot = document.getElementById("pttChDot");
+    if (dot && activeTalkChannels.length === 1) {
+      const ch = channels.find(c => c.id === activeTalkChannels[0]);
+      dot.style.background = ch?.color || "#22c55e";
+    } else if (dot && activeTalkChannels.length > 1) {
+      dot.style.background = "linear-gradient(45deg, #22c55e, #3b82f6, #f97316, #a855f7)";
+    } else if (dot) {
+      dot.style.background = "#ef4444";
+    }
+  } else {
+    // Mode normal : canal actif
+    const ch = channels.find(c => c.id === myChannel);
+    document.getElementById("pttLabel").textContent = ch?.name || myChannel;
+    const dot = document.getElementById("pttChDot");
+    if (dot) dot.style.background = ch?.color || "#22c55e";
+  }
+}
+
+function getAllTalkChannels() {
+  return Object.keys(channelStates).filter(id => channelStates[id]?.talk);
+}
+
+function renderChannelStrip() {
+  const strip = document.getElementById("channelStrip");
+  strip.innerHTML = "";
+  channels.forEach(ch => {
+    const pill = document.createElement("div");
+    pill.className = "ch-pill" + (ch.id === myChannel ? " active" : "");
+    const state = channelState[ch.id];
+    const count = state ? state.users.length : 0;
+    pill.textContent = ch.name;
+    if (count > 0) {
+      const badge = document.createElement("div");
+      badge.className = "badge";
+      badge.textContent = count;
+      pill.appendChild(badge);
+    }
+    pill.onclick = () => switchChannel(ch.id);
+    strip.appendChild(pill);
+  });
+  updatePTTLabel();
+}
+
+function switchChannel(chId) {
+  myChannel = chId;
+  if (socket) {
+    socket.emit("switch-channel", { channel: chId });
+    // Si on est en mode normal, s'assurer qu'on n'est plus en multi-canaux
+    if (!directorMode) {
+      socket?.emit("update-listen-channels", { listenChannels: [] });
+      socket?.emit("update-talk-channels", { talkChannels: [] });
+    }
+  }
+  renderChannelStrip();
+  updatePTTLabel();
+}
+
+function getChannelName(id) {
+  return channels.find(c => c.id === id)?.name || id;
+}
+
+// ── ACTIVITY LOG ──
+const speakingEntries = new Map();
+
+function addActivityEntry(text, icon, color) {
+  const log = document.getElementById("activity");
+  const entry = document.createElement("div");
+  entry.className = "activity-entry";
+  const time = new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  entry.innerHTML = `
+    <div class="entry-initial" style="background:${color}22;color:${color}">${icon}</div>
+    <div class="entry-body">
+      <div class="entry-sub">${text}</div>
+    </div>
+    <div class="entry-time">${time}</div>`;  
+  log.appendChild(entry);
+  log.scrollTop = log.scrollHeight;
+  // Keep max 50 entries
+  while (log.children.length > 50) log.removeChild(log.firstChild);
+}
+
+function updateSpeakingEntry(fromId, from, channel, isSpeaking) {
+  const log = document.getElementById("activity");
+  if (isSpeaking) {
+    const entry = document.createElement("div");
+    entry.className = "activity-entry speaking";
+    entry.id = "speaking-" + fromId;
+    const chColor = channels.find(c => c.id === channel)?.color || "#22c55e";
+    const initials = from.slice(0,2).toUpperCase();
+    entry.innerHTML = `
+      <div class="entry-initial" style="background:${chColor}22;color:${chColor}">${initials}</div>
+      <div class="entry-body">
+        <div class="entry-name">${from}</div>
+        <div class="entry-sub">
+          <div class="on-air-dot"></div>
+          <span style="color:var(--green);font-weight:700">ON AIR</span>
+          <div class="speaking-wave">
+            <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+          </div>
+        </div>
+      </div>`;  
+    log.appendChild(entry);
+    log.scrollTop = log.scrollHeight;
+    speakingEntries.set(fromId, entry);
+  } else {
+    const entry = speakingEntries.get(fromId);
+    if (entry) {
+      entry.classList.remove("speaking");
+      entry.querySelector(".entry-sub").innerHTML = `<span style="color:var(--muted)">A terminé</span>`;
+      speakingEntries.delete(fromId);
+    }
+  }
+}
+
+// ── USERS PANEL ──
+document.getElementById("usersBtn").onclick = () => {
+  renderUsersList();
+  document.getElementById("usersPanel").classList.remove("hidden");
+};
+document.getElementById("closeUsers").onclick = () => {
+  document.getElementById("usersPanel").classList.add("hidden");
+};
+
+function renderUsersList() {
+  const list = document.getElementById("usersList");
+  list.innerHTML = "";
+  channels.forEach(ch => {
+    const state = channelState[ch.id];
+    const users = state?.users || [];
+    if (!users.length) return;
+    const group = document.createElement("div");
+    group.className = "ch-group";
+    group.innerHTML = `<div class="ch-group-header"><div class="ch-group-dot" style="background:${ch.color}"></div>${ch.name} <span style="opacity:.5">(${users.length})</span></div>`;
+    users.forEach(u => {
+      const row = document.createElement("div");
+      row.className = "user-row";
+      const initials = u.name.slice(0,2).toUpperCase();
+      row.innerHTML = `
+        <div class="user-row-avatar" style="background:${ch.color}22;color:${ch.color}">${initials}</div>
+        <div class="user-row-name">${u.name}${u.id === socket?.id ? '<span class="user-me">(moi)</span>' : ""}</div>`;
+      group.appendChild(row);
+    });
+    list.appendChild(group);
+  });
+  if (!list.innerHTML) {
+    list.innerHTML = '<div style="color:var(--muted);font-size:.875rem">Aucun participant connecté</div>';
+  }
+}
+
+// ── QR CODE ──
+document.getElementById("qrBtn").onclick = async () => {
+  document.getElementById("qrPanel").classList.remove("hidden");
+  try {
+    const res = await fetch("/qr");
+    const data = await res.json();
+    document.getElementById("qrImage").src = data.qr;
+    document.getElementById("qrUrl").textContent = data.url;
+  } catch(e) {
+    document.getElementById("qrUrl").textContent = window.location.href;
+  }
+};
+
+// ── CALL / RING ──
+let ringTimeout = null;
+
+function setupCall() {
+  const btn = document.getElementById("callBtn");
+  btn.addEventListener("click", () => {
+    if (!socket) return;
+    socket.emit("call-ring", { channel: myChannel });
+    btn.classList.add("calling");
+    addActivityEntry(`Tu as appelé ${getChannelName(myChannel)}`, "📞", "#f59e0b");
+    setTimeout(() => btn.classList.remove("calling"), 2000);
+  });
+}
+
+function playRingTone() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const times = [0, 0.35];
+    times.forEach(t => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value = 1200;
+      osc.type = "sine";
+      gain.gain.setValueAtTime(0.4, ctx.currentTime + t);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.25);
+      osc.start(ctx.currentTime + t);
+      osc.stop(ctx.currentTime + t + 0.3);
+    });
+  } catch(e) {}
+}
+
+function showRingAlert(from, channel) {
+  const alert = document.getElementById("ringAlert");
+  alert.textContent = `📞 ${from} appelle — ${getChannelName(channel)}`;
+  alert.style.transform = "translateY(0)";
+  document.body.classList.add("ringing");
+  
+  // Bouton call clignote en rouge
+  const callBtn = document.getElementById("callBtn");
+  callBtn.classList.add("ringing");
+  
+  // Sonnerie Web Audio si activée
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+  if (ringSoundEnabled && audioCtx) {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.frequency.value = 800;
+    osc.type = "sine";
+    gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+    osc.start(audioCtx.currentTime);
+    osc.stop(audioCtx.currentTime + 0.4);
+  }
+  
+  setTimeout(() => {
+    alert.style.transform = "translateY(-100%)";
+    document.body.classList.remove("ringing");
+    callBtn.classList.remove("ringing");
+  }, 3000);
+}
+
+function dismissRing() {
+  document.getElementById("ringAlert").classList.remove("show");
+  document.getElementById("callBtn")?.classList.remove("ringing");
+  if (ringTimeout) { clearTimeout(ringTimeout); ringTimeout = null; }
+}
+
+// ── MIC ERROR ──
+function showMicError(msg) {
+  let el = document.getElementById("micError");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "micError";
+    el.style.cssText = "width:100%;max-width:380px;background:#ef444422;border:1px solid #ef444466;border-radius:10px;padding:14px 16px;font-size:.82rem;line-height:1.6;color:#fca5a5;text-align:center;";
+    document.getElementById("joinBtn").insertAdjacentElement("afterend", el);
+  }
+  el.innerHTML = "🎙️ " + msg;
+}
+
+// Auto-rejoin if we have saved credentials
+window.addEventListener("load", () => {
+  if (savedName && savedChannel) {
+    const hint = document.createElement("div");
+    hint.style.cssText = "font-size:.75rem;color:var(--muted);text-align:center;";
+    hint.innerHTML = `Bienvenue <strong style='color:var(--text)'>${savedName}</strong> — <span style='color:var(--green);cursor:pointer;text-decoration:underline' onclick='document.getElementById("joinBtn").click()'>Rejoindre directement →</span>`;
+    document.getElementById("joinBtn").insertAdjacentElement("beforebegin", hint);
+  }
+});
+
+// Allow closing panels by clicking backdrop
+document.getElementById("usersPanel").addEventListener("click", (e) => {
+  if (e.target === document.getElementById("usersPanel"))
+    document.getElementById("usersPanel").classList.add("hidden");
+});
+document.getElementById("qrPanel").addEventListener("click", (e) => {
+  if (e.target === document.getElementById("qrPanel"))
+    document.getElementById("qrPanel").classList.add("hidden");
+});
+</script>
+</body>
+</html>
