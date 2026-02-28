@@ -101,7 +101,7 @@ jobs:
           fi
 
       - name: Build APK
-        run: chmod +x gradlew && ./gradlew assembleRelease --no-daemon
+        run: chmod +x dewicom-mobile/gradlew && dewicom-mobile/gradlew assembleRelease --no-daemon
         working-directory: dewicom-mobile
 
       - name: Upload APK
