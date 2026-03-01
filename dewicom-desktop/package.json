@@ -13,6 +13,7 @@
   "main": "main.js",
   "scripts": {
     "start": "NODE_EXTRA_CA_CERTS=$(mkcert -CAROOT)/rootCA.pem electron .",
+    "sync-public": "node -e \"const fs=require('fs'),path=require('path');const src=path.join(__dirname,'../dewicom/public');const dst=path.join(__dirname,'public');if(fs.existsSync(src)){fs.cpSync(src,dst,{recursive:true});console.log('public/ synced from dewicom/')}\"",
     "build:linux": "electron-builder --linux",
     "build:mac": "electron-builder --mac",
     "build:win": "electron-builder --win",
@@ -24,6 +25,14 @@
     "directories": {
       "output": "dist"
     },
+    "files": [
+      "**/*",
+      "!node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
+      "!node_modules/*/{test,__tests__,tests,powered-test,example,examples}",
+      "!node_modules/.bin",
+      "!**/*.{iml,o,hprof,orig,pyc,pyo,rbc,swp,csproj,sln,xproj}",
+      "public/**"
+    ],
     "linux": {
       "target": [
         "AppImage",

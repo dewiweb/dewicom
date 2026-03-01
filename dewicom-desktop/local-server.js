@@ -15,11 +15,11 @@ const MCAST_ADDR = "224.0.0.251";
 const MCAST_PORT = 9999;
 const LOCAL_PORT = 3001;
 
-// Public dir : utilise celui du projet dewicom si présent, sinon le dossier local
+// Public dir : cherche d'abord public/ local (AppImage/prod), puis ../dewicom/public (dev)
 const PUBLIC_DIR = (() => {
   const candidates = [
-    path.join(__dirname, "../dewicom/public"),
     path.join(__dirname, "public"),
+    path.join(__dirname, "../dewicom/public"),
   ];
   for (const p of candidates) {
     if (fs.existsSync(p)) return p;
