@@ -78,10 +78,8 @@ function stopAnnouncing() {
  */
 function start() {
   return new Promise((resolve, reject) => {
-    // Charge express et socket.io depuis node_modules local, fallback ../dewicom/
-    const localModules = path.join(__dirname, "node_modules");
-    const dewicomModules = path.join(__dirname, "../dewicom/node_modules");
-    const modulesPath = fs.existsSync(localModules) ? localModules : dewicomModules;
+    // Charge express et socket.io depuis node_modules local
+    const modulesPath = path.join(__dirname, "node_modules");
 
     let express, socketIo;
     try {
