@@ -151,12 +151,12 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void requestRediscovery() {
             // Relance l'élection complète depuis le JS (bouton Reconnecter)
-            runOnUiThread(() -> {
-                if (leaderElection != null) leaderElection.stop();
-                leaderElection = null;
+            executor.execute(() -> {
+                if (leaderElection != null) { leaderElection.stop(); leaderElection = null; }
+                if (localWebServer != null) { localWebServer.stop(); localWebServer = null; }
                 pendingRemoteIP = null;
                 scanComplete = false;
-                startLeaderElection();
+                runOnUiThread(() -> startLeaderElection());
             });
         }
     }
