@@ -187,9 +187,9 @@ async function startSession() {
     if (directorMode) {
       const listenChannels = Object.keys(channelStates).filter(id => channelStates[id]?.listen);
       const talkChannels = Object.keys(channelStates).filter(id => channelStates[id]?.talk);
-      socket.emit("join", { name: myName, channel: myChannel, listenChannels, talkChannels });
+      socket.emit("join", { clientId, name: myName, channel: myChannel, listenChannels, talkChannels });
     } else {
-      socket.emit("join", { name: myName, channel: myChannel });
+      socket.emit("join", { clientId, name: myName, channel: myChannel });
     }
   });
   socket.on("disconnect", () => {
