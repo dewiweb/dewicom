@@ -472,6 +472,7 @@
       <div class="conn-badge" id="connBadge">
         <div class="conn-dot off" id="connDot"></div>
         <span id="connLabel">Connexion…</span>
+        <button id="reconnectBtn" onclick="manualReconnect()" title="Reconnecter" style="display:none;margin-left:6px;padding:2px 8px;font-size:11px;background:#3b82f6;color:#fff;border:none;border-radius:8px;cursor:pointer;">↺ Reconnecter</button>
       </div>
     </div>
     <div class="topbar-right">
@@ -631,6 +632,24 @@ nameInput.addEventListener("input", () => {
 
 joinBtn.addEventListener("click", startSession);
 
+// ── RECONNEXION MANUELLE ──
+function manualReconnect() {
+  const btn = document.getElementById("reconnectBtn");
+  btn.textContent = "…";
+  btn.disabled = true;
+  if (socket) {
+    socket.disconnect();
+    socket.connect();
+  } else {
+    startSession();
+    return;
+  }
+  setTimeout(() => {
+    btn.textContent = "↺ Reconnecter";
+    btn.disabled = false;
+  }, 3000);
+}
+
 // ── CONNECTED STATE ──
 function setConnected(ok) {
   document.getElementById("connDot").className = "conn-dot" + (ok ? "" : " off");
@@ -691,7 +710,8 @@ async function startSession() {
     }
   });
 
-  socket.on("disconnect", () => { setConnected(false); document.getElementById("connBadge")?.classList.remove("live"); });
+  socket.on("disconnect", () => { setConnected(false); document.getElementById("connBadge")?.classList.remove("live"); document.getElementById("reconnectBtn").style.display = "inline-block"; });
+  socket.on("connect", () => { document.getElementById("reconnectBtn").style.display = "none"; });
 
   socket.on("channels-init", (chs) => {
     channels = chs;
