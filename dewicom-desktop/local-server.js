@@ -11,6 +11,8 @@ const os = require("os");
 const dgram = require("dgram");
 const fs = require("fs");
 
+const { version: APP_VERSION } = require("./package.json");
+
 const MCAST_ADDR = "224.0.0.251";
 const MCAST_PORT = 9999;
 const LOCAL_PORT = 3001;
@@ -76,10 +78,10 @@ function stopAnnouncing() {
  */
 function start() {
   return new Promise((resolve, reject) => {
-    // Charge express et socket.io depuis le dossier dewicom existant
-    const dewicomModules = path.join(__dirname, "../dewicom/node_modules");
+    // Charge express et socket.io depuis node_modules local, fallback ../dewicom/
     const localModules = path.join(__dirname, "node_modules");
-    const modulesPath = fs.existsSync(dewicomModules) ? dewicomModules : localModules;
+    const dewicomModules = path.join(__dirname, "../dewicom/node_modules");
+    const modulesPath = fs.existsSync(localModules) ? localModules : dewicomModules;
 
     let express, socketIo;
     try {
@@ -101,7 +103,7 @@ function start() {
 
     // ── Routes ──────────────────────────────────────────────────────────────
     expressApp.get("/api/dewicom-discovery", (req, res) => {
-      res.json({ service: "DewiCom", version: "1.0.0", mode: "desktop-local" });
+      res.json({ service: "DewiCom", version: APP_VERSION, mode: "desktop-local" });
     });
 
     expressApp.use(express.static(PUBLIC_DIR));
