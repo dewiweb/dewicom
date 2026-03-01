@@ -1,8 +1,7 @@
-# Règles du workspace DewiCom
-
-## Modularisation des fichiers
-
-Tout fichier dépassant **1000 lignes** doit être modularisé :
+---
+trigger: always_on
+---
+Tout fichier dépassant 1000 lignes doit être modularisé si c'est techniquement possible:
 
 - Identifier les blocs fonctionnels cohérents (ex: gestion socket, UI, audio, élection leader, etc.)
 - Extraire chaque bloc dans un fichier dédié avec un nom explicite
@@ -11,8 +10,3 @@ Tout fichier dépassant **1000 lignes** doit être modularisé :
 - Documenter brièvement chaque module extrait (une ligne de commentaire en tête de fichier suffit)
 
 Cette règle s'applique à tous les langages du projet : JavaScript, Java, HTML (scripts inline à externaliser), Gradle.
-
-**Exemples dans ce projet :**
-- `dewicom/public/index.html` (~1500 lignes) → externaliser le JS en `app.js`, `socket.js`, `audio.js`, `ui.js`
-- `dewicom-mobile/app/src/main/assets/public/index.html` (~1600 lignes) → même découpage
-- `dewicom-mobile/app/src/main/java/com/dewicom/MainActivity.java` → extraire la logique métier dans des classes dédiées si > 1000 lignes
