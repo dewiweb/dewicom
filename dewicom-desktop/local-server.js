@@ -133,17 +133,17 @@ function start() {
         id, name: ch.name, color: ch.color,
       })));
 
-      socket.on("join", ({ name, channel, listenChannels = [], talkChannels = [] }) => {
-        // Nettoie toute entrée existante avec le même nom (reconnexion après redémarrage serveur)
+      socket.on("join", ({ clientId, name, channel, listenChannels = [], talkChannels = [] }) => {
+        // Nettoie toute entrée existante avec le même clientId (reconnexion après redémarrage serveur)
         for (const [oldId, oldUser] of users.entries()) {
-          if (oldUser.name === name && oldId !== socket.id) {
+          if (oldId !== socket.id && (clientId ? oldUser.clientId === clientId : oldUser.name === name)) {
             const oldCh = channels[oldUser.channel];
             if (oldCh) oldCh.users.delete(oldId);
             users.delete(oldId);
           }
         }
         const ch = channels[channel] || channels.general;
-        const user = { name, channel, listenChannels, talkChannels, socketId: socket.id };
+        const user = { clientId, name, channel, listenChannels, talkChannels, socketId: socket.id };
         users.set(socket.id, user);
         ch.users.set(socket.id, user);
         socket.join(channel);
