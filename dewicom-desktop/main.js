@@ -10,6 +10,7 @@ process.on("uncaughtException", (e) => { if (e.code === "EPIPE") return; throw e
 
 const localServer = require("./local-server");
 const { LeaderElection, getLocalIP } = require("./leader-election");
+const { version: APP_VERSION } = require("./package.json");
 
 let localServerRunning = false;
 let rediscoveryTimer = null;
@@ -216,7 +217,7 @@ async function discoverServer() {
 function startAnnouncing(ip, port) {
   announceSocket = dgram.createSocket({ type: "udp4" });
   const payload = Buffer.from(JSON.stringify({
-    service: "DewiCom", version: "1.0.0",
+    service: "DewiCom", version: APP_VERSION,
     ip, port, protocol: "http"
   }));
 

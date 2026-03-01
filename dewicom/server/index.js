@@ -6,6 +6,7 @@ const QRCode = require("qrcode");
 const os = require("os");
 const path = require("path");
 const dgram = require("dgram");
+const { version: APP_VERSION } = require("../package.json");
 
 const app = express();
 const sslOptions = {
@@ -63,7 +64,7 @@ app.get("/api/discover", (req, res) => {
     https: true,
     channels: Object.keys(channels).length,
     users: Array.from(users.values()).length,
-    version: "1.0.0",
+    version: APP_VERSION,
     timestamp: new Date().toISOString(),
     url: `https://${serverIP}:${PORT}`
   };
@@ -288,7 +289,7 @@ server.listen(PORT, "0.0.0.0", () => {
     const announce = () => {
       const payload = Buffer.from(JSON.stringify({
         service: "DewiCom",
-        version: "1.0.0",
+        version: APP_VERSION,
         ip: ip,
         port: PORT,
         protocol: "https"
@@ -313,7 +314,7 @@ server.listen(PORT, "0.0.0.0", () => {
 app.get('/api/dewicom-discovery', (req, res) => {
   res.json({
     service: 'DewiCom',
-    version: '1.0.0',
+    version: APP_VERSION,
     timestamp: new Date().toISOString(),
     endpoints: {
       socket: '/socket.io/',
