@@ -2,6 +2,12 @@ const { app, BrowserWindow, ipcMain, session } = require("electron");
 const dgram = require("dgram");
 const path = require("path");
 const os = require("os");
+
+// Évite le crash EPIPE quand stdout/stderr est un pipe cassé (AppImage lancée sans terminal)
+process.stdout.on("error", (e) => { if (e.code === "EPIPE") process.exit(0); });
+process.stderr.on("error", (e) => { if (e.code === "EPIPE") process.exit(0); });
+process.on("uncaughtException", (e) => { if (e.code === "EPIPE") return; throw e; });
+
 const localServer = require("./local-server");
 const { LeaderElection, getLocalIP } = require("./leader-election");
 
