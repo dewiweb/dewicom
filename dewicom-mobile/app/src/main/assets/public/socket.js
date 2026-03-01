@@ -1,15 +1,18 @@
 // Gestion connexion socket mobile : WS natif (APK Java), Socket.io (nodejs), reconnexion leader
 
+function _emitJoin(sock) {
+  if (!myName || !myChannel) return;
+  const listenChannels = Object.keys(channelStates || {}).filter(id => channelStates[id]?.listen);
+  const talkChannels   = Object.keys(channelStates || {}).filter(id => channelStates[id]?.talk);
+  sock.emit("join", { clientId, name: myName, channel: myChannel, listenChannels, talkChannels });
+}
+
 function _registerSocketHandlers(sock) {
   sock.on("connect", () => {
     setConnected(true);
     document.getElementById("connBadge")?.classList.add("live");
     document.getElementById("reconnectBtn").style.display = "none";
-    if (myName && myChannel) {
-      const listenChannels = Object.keys(channelStates || {}).filter(id => channelStates[id]?.listen);
-      const talkChannels   = Object.keys(channelStates || {}).filter(id => channelStates[id]?.talk);
-      sock.emit("join", { name: myName, channel: myChannel, listenChannels, talkChannels });
-    }
+    _emitJoin(sock);
   });
   sock.on("disconnect", () => {
     setConnected(false);
@@ -105,6 +108,10 @@ window.reconnectSocket = function(newLeaderIP) {
     socket = io("http://" + ip + ":3001", { transports: ["websocket"] });
   }
   _registerSocketHandlers(socket);
+  // Si déjà connecté (ex: retour sur 127.0.0.1), force le join immédiatement
+  const isNativeConnected = useWS && socket._ws && socket._ws.readyState === WebSocket.OPEN;
+  const isIoConnected = !useWS && socket.connected;
+  if (isNativeConnected || isIoConnected) _emitJoin(socket);
 };
 
 function manualReconnect() {
@@ -179,41 +186,7 @@ async function startSession() {
     socket = io(socketUrl, { transports: ["websocket"] });
   }
 
-  // Handler connect avec join initial (director ou normal)
-  socket.on("connect", () => {
-    setConnected(true);
-    document.getElementById("connBadge")?.classList.add("live");
-    document.getElementById("reconnectBtn").style.display = "none";
-    if (directorMode) {
-      const listenChannels = Object.keys(channelStates).filter(id => channelStates[id]?.listen);
-      const talkChannels = Object.keys(channelStates).filter(id => channelStates[id]?.talk);
-      socket.emit("join", { clientId, name: myName, channel: myChannel, listenChannels, talkChannels });
-    } else {
-      socket.emit("join", { clientId, name: myName, channel: myChannel });
-    }
-  });
-  socket.on("disconnect", () => {
-    setConnected(false);
-    document.getElementById("connBadge")?.classList.remove("live");
-    document.getElementById("reconnectBtn").style.display = "inline-block";
-  });
-  socket.on("channels-init", (chs) => { channels = chs; renderChannelStrip(); renderMonitoringControls(); renderChannelSelect(); });
-  socket.on("channel-state", (state) => {
-    channelState = state;
-    renderChannelStrip();
-    if (!document.getElementById("usersPanel").classList.contains("hidden")) renderUsersList();
-  });
-  socket.on("audio-chunk", ({ from, chunk }) => {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
-    playChunk(chunk);
-  });
-  socket.on("ptt-state", ({ from, fromId, channel, speaking: isSpeaking }) => {
-    if (fromId === socket.id) return;
-    updateSpeakingEntry(fromId, from, channel, isSpeaking);
-  });
-  socket.on("user-joined", ({ name, channel }) => addActivityEntry(`${name} a rejoint ${getChannelName(channel)}`, "🟢", "#22c55e"));
-  socket.on("user-left",   ({ name, channel }) => addActivityEntry(`${name} a quitté ${getChannelName(channel)}`, "🔴", "#ef4444"));
-  socket.on("call-ring",   ({ from, channel }) => { showRingAlert(from, channel); addActivityEntry(`${from} appelle — ${getChannelName(channel)}`, "📞", "#f59e0b"); });
+  _registerSocketHandlers(socket);
 
   // Afficher l'écran principal
   document.getElementById("joinScreen").classList.add("hidden");
