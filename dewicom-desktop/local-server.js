@@ -134,6 +134,14 @@ function start() {
       })));
 
       socket.on("join", ({ name, channel, listenChannels = [], talkChannels = [] }) => {
+        // Nettoie toute entrée existante avec le même nom (reconnexion après redémarrage serveur)
+        for (const [oldId, oldUser] of users.entries()) {
+          if (oldUser.name === name && oldId !== socket.id) {
+            const oldCh = channels[oldUser.channel];
+            if (oldCh) oldCh.users.delete(oldId);
+            users.delete(oldId);
+          }
+        }
         const ch = channels[channel] || channels.general;
         const user = { name, channel, listenChannels, talkChannels, socketId: socket.id };
         users.set(socket.id, user);
