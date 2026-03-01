@@ -199,14 +199,17 @@ async function discoverServer() {
         sendToWindow("discovery-status", `Leader — serveur actif sur ${myIP}:3001`);
         resolve({ ip: "127.0.0.1", port: 3001, protocol: "http" });
       },
-      onLeaderElected: (leaderIP) => {
+      onLeaderElected: async (leaderIP) => {
         console.log(`[election] FOLLOWER — leader: ${leaderIP}`);
         sendToWindow("discovery-status", `Follower — leader: ${leaderIP}:3001`);
         localServer.stop();
         localServerRunning = false;
-        const url = `http://${leaderIP}:3001`;
+        // Détecte le protocole réel du leader (HTTP local ou HTTPS standalone)
+        const detected = await checkServer(leaderIP, 3001);
+        const protocol = detected?.protocol || "http";
+        const url = `${protocol}://${leaderIP}:3001`;
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.loadURL(url);
-        resolve({ ip: leaderIP, port: 3001, protocol: "http" });
+        resolve({ ip: leaderIP, port: 3001, protocol });
       },
     });
     leaderElection.start();
