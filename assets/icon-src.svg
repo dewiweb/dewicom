@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Fond rond sombre -->
+  <rect width="512" height="512" rx="96" fill="#1a1a2e"/>
+
+  <!-- Cercle onde extérieur -->
+  <circle cx="256" cy="256" r="200" fill="none" stroke="#3b82f6" stroke-width="18" opacity="0.4"/>
+  <circle cx="256" cy="256" r="155" fill="none" stroke="#3b82f6" stroke-width="14" opacity="0.6"/>
+
+  <!-- Micro central -->
+  <rect x="210" y="120" width="92" height="160" rx="46" fill="#3b82f6"/>
+
+  <!-- Corps micro intérieur -->
+  <rect x="228" y="138" width="56" height="124" rx="28" fill="#1e40af"/>
+
+  <!-- Support micro -->
+  <path d="M160 268 Q160 360 256 360 Q352 360 352 268" fill="none" stroke="#3b82f6" stroke-width="22" stroke-linecap="round"/>
+  <line x1="256" y1="360" x2="256" y2="400" stroke="#3b82f6" stroke-width="22" stroke-linecap="round"/>
+  <line x1="200" y1="400" x2="312" y2="400" stroke="#3b82f6" stroke-width="22" stroke-linecap="round"/>
+
+  <!-- PTT bouton -->
+  <circle cx="256" cy="256" r="32" fill="#60a5fa" opacity="0.9"/>
+  <circle cx="256" cy="256" r="18" fill="white" opacity="0.95"/>
+</svg>
