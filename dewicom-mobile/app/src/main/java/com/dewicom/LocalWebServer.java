@@ -192,14 +192,28 @@ public class LocalWebServer {
                     case "join": {
                         String name = extractJson(payload, "name");
                         String channel = extractJson(payload, "channel");
+                        String clientId = extractJson(payload, "clientId");
                         if (name == null || channel == null) return;
                         synchronized (LocalWebServer.this) {
-                            // Retire des anciens canaux
+                            // Nettoie toute entrée existante avec le même clientId ou nom (reconnexion)
+                            java.util.Iterator<Map.Entry<WebSocket, String[]>> it = socketUser.entrySet().iterator();
+                            while (it.hasNext()) {
+                                Map.Entry<WebSocket, String[]> entry = it.next();
+                                if (entry.getKey() == ws) continue;
+                                String[] u = entry.getValue();
+                                boolean sameClient = (clientId != null && clientId.equals(u.length > 2 ? u[2] : null))
+                                        || (clientId == null && name.equals(u[0]));
+                                if (sameClient) {
+                                    for (Set<WebSocket> s : channelSockets.values()) s.remove(entry.getKey());
+                                    it.remove();
+                                }
+                            }
+                            // Retire des anciens canaux du ws courant
                             String[] old = socketUser.get(ws);
                             if (old != null) {
                                 for (Set<WebSocket> s : channelSockets.values()) s.remove(ws);
                             }
-                            socketUser.put(ws, new String[]{name, channel});
+                            socketUser.put(ws, new String[]{name, channel, clientId != null ? clientId : ""});
                             channelSockets.computeIfAbsent(channel, k -> new HashSet<>()).add(ws);
                             // Ajoute aussi dans les listenChannels (mode director)
                             String listenRaw = extractJsonArray(payload, "listenChannels");
