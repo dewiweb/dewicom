@@ -232,7 +232,12 @@ public class MainActivity extends Activity {
         leaderElection = new LeaderElection(this, localServerAddress, new LeaderElection.Listener() {
             @Override
             public void onBecomeLeader(String myIP) {
-                // Ce nœud est leader : son serveur local est déjà actif
+                // Ce nœud est leader : redémarre le serveur local si nécessaire
+                if (localWebServer == null) {
+                    localWebServer = new LocalWebServer(MainActivity.this);
+                    try { localWebServer.start(); Log.d("MainActivity", "LocalWebServer redémarré (leader)"); }
+                    catch (java.io.IOException e) { Log.e("MainActivity", "Erreur redémarrage serveur: " + e.getMessage()); }
+                }
                 foundServerIP = "127.0.0.1";
                 foundServerMode = "local";
                 scanComplete = true;
@@ -252,7 +257,12 @@ public class MainActivity extends Activity {
 
             @Override
             public void onLeaderElected(String leaderIP) {
-                // Un autre nœud est leader : on se connecte à lui
+                // Un autre nœud est leader : arrête le serveur local pour éviter les audio zombies
+                if (localWebServer != null) {
+                    localWebServer.stop();
+                    localWebServer = null;
+                    Log.d("MainActivity", "LocalWebServer arrêté (follower)");
+                }
                 String detectedMode = NetworkDiscovery.getServerMode(leaderIP, 3001);
                 final String mode = "unknown".equals(detectedMode) ? "nodejs" : detectedMode;
                 foundServerIP = leaderIP;
