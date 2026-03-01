@@ -21,8 +21,8 @@ const io = new Server(server, {
 
 const PORT = process.env.PORT || 3001;
 
-// Static files
-app.use(express.static(path.join(__dirname, "../public")));
+// Static files (shared/public/ = source unique pour desktop + server)
+app.use(express.static(path.join(__dirname, "../../shared/public")));
 
 // Get local IP
 function getLocalIP() {

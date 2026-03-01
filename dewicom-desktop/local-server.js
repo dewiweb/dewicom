@@ -15,16 +15,16 @@ const MCAST_ADDR = "224.0.0.251";
 const MCAST_PORT = 9999;
 const LOCAL_PORT = 3001;
 
-// Public dir : cherche d'abord public/ local (AppImage/prod), puis ../dewicom/public (dev)
+// Public dir : shared/public/ (source unique), fallback public/ local (AppImage embarqué)
 const PUBLIC_DIR = (() => {
   const candidates = [
+    path.join(__dirname, "../shared/public"),
     path.join(__dirname, "public"),
-    path.join(__dirname, "../dewicom/public"),
   ];
   for (const p of candidates) {
     if (fs.existsSync(p)) return p;
   }
-  return path.join(__dirname, "public");
+  return path.join(__dirname, "../shared/public");
 })();
 
 let expressApp = null;
