@@ -147,7 +147,18 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public boolean isLocalMode() { return "127.0.0.1".equals(foundServerIP); }
         @JavascriptInterface
-        public String getServerMode() { return foundServerMode; } // "local", "apk", "nodejs"
+        public String getServerMode() { return foundServerMode; }
+        @JavascriptInterface
+        public void requestRediscovery() {
+            // Relance l'élection complète depuis le JS (bouton Reconnecter)
+            runOnUiThread(() -> {
+                if (leaderElection != null) leaderElection.stop();
+                leaderElection = null;
+                pendingRemoteIP = null;
+                scanComplete = false;
+                startLeaderElection();
+            });
+        }
     }
 
 

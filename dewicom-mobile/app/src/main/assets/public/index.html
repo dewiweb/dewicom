@@ -653,8 +653,13 @@ function manualReconnect() {
   const btn = document.getElementById("reconnectBtn");
   btn.textContent = "…";
   btn.disabled = true;
-  if (typeof window.reconnectSocket === "function") {
-    window.reconnectSocket(null);
+  // Sur APK Android : demande à Java de relancer l'élection complète
+  if (window.DewiComAndroid?.requestRediscovery) {
+    window.DewiComAndroid.requestRediscovery();
+  } else if (typeof window.reconnectSocket === "function") {
+    // Reconnexion socket sur le même serveur connu
+    const lastIP = window.dewicomServerIP || null;
+    window.reconnectSocket(lastIP);
   } else if (socket && socket.disconnect) {
     socket.disconnect();
     socket.connect();
@@ -665,7 +670,7 @@ function manualReconnect() {
   setTimeout(() => {
     btn.textContent = "↺ Reconnecter";
     btn.disabled = false;
-  }, 3000);
+  }, 5000);
 }
 
 // ── CONNECTED STATE ──

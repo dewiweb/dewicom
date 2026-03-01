@@ -637,7 +637,20 @@ function manualReconnect() {
   const btn = document.getElementById("reconnectBtn");
   btn.textContent = "…";
   btn.disabled = true;
-  if (socket) {
+  // Sur desktop Electron : relance la découverte + élection complète
+  if (window.DewiComDesktop?.rediscover) {
+    window.DewiComDesktop.rediscover().then((srv) => {
+      if (srv) {
+        const url = srv.protocol + "://" + srv.ip + ":" + srv.port;
+        window.location.href = url;
+      } else {
+        // Fallback simple reconnexion socket
+        if (socket) { socket.disconnect(); socket.connect(); }
+      }
+    }).catch(() => {
+      if (socket) { socket.disconnect(); socket.connect(); }
+    });
+  } else if (socket) {
     socket.disconnect();
     socket.connect();
   } else {
@@ -647,7 +660,7 @@ function manualReconnect() {
   setTimeout(() => {
     btn.textContent = "↺ Reconnecter";
     btn.disabled = false;
-  }, 3000);
+  }, 5000);
 }
 
 // ── CONNECTED STATE ──
