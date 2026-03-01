@@ -22,9 +22,20 @@ jobs:
           cache: 'npm'
           cache-dependency-path: dewicom-desktop/package-lock.json
 
+      - name: Cache Electron binaries
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/electron
+          key: electron-cache-${{ hashFiles('dewicom-desktop/package-lock.json') }}
+          restore-keys: electron-cache-
+
       - name: Install dependencies
         run: npm ci
         working-directory: dewicom-desktop
+        env:
+          npm_config_fetch_retry_mintimeout: 20000
+          npm_config_fetch_retry_maxtimeout: 120000
+          npm_config_fetch_retries: 5
 
       - name: Build AppImage
         run: npm run build:linux
@@ -51,9 +62,20 @@ jobs:
           cache: 'npm'
           cache-dependency-path: dewicom-desktop/package-lock.json
 
+      - name: Cache Electron binaries
+        uses: actions/cache@v4
+        with:
+          path: ~\AppData\Local\electron\Cache
+          key: electron-cache-${{ hashFiles('dewicom-desktop/package-lock.json') }}
+          restore-keys: electron-cache-
+
       - name: Install dependencies
         run: npm ci
         working-directory: dewicom-desktop
+        env:
+          npm_config_fetch_retry_mintimeout: 20000
+          npm_config_fetch_retry_maxtimeout: 120000
+          npm_config_fetch_retries: 5
 
       - name: Build EXE
         run: npm run build:win
