@@ -17,12 +17,13 @@ const MCAST_ADDR = "224.0.0.251";
 const MCAST_PORT = 9999;
 const LOCAL_PORT = 3001;
 
-// Public dir : shared/public/ (source unique), fallback public/ local (AppImage embarqué)
+// Public dir : process.resourcesPath/public (AppImage packagée), sinon ../shared/public (dev)
 const PUBLIC_DIR = (() => {
   const candidates = [
+    process.resourcesPath && path.join(process.resourcesPath, "public"),
     path.join(__dirname, "../shared/public"),
     path.join(__dirname, "public"),
-  ];
+  ].filter(Boolean);
   for (const p of candidates) {
     if (fs.existsSync(p)) return p;
   }

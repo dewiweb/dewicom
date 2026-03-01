@@ -31,7 +31,7 @@
       "!node_modules/.bin",
       "!**/*.{iml,o,hprof,orig,pyc,pyo,rbc,swp,csproj,sln,xproj}"
     ],
-    "extraFiles": [
+    "extraResources": [
       { "from": "../shared/public", "to": "public" }
     ],
     "linux": {
