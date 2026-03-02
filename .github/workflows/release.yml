@@ -87,7 +87,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: electron-windows
-          path: dewicom-desktop/dist/*.exe
+          path: dewicom-desktop/dist/*Setup*.exe
 
   # ── Android APK ───────────────────────────────────────────────────────────────
   android-apk:

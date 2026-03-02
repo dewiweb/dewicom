@@ -5,6 +5,13 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 
 ---
 
+## [1.1.15] — 2026-03-02
+
+### Corrigé
+- **CI release** : glob Windows restreint à `*Setup*.exe` pour n'uploader que l'installeur NSIS (évite les doublons `.exe`)
+
+---
+
 ## [1.1.14] — 2026-03-02
 
 ### Corrigé
