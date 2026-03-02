@@ -129,7 +129,8 @@ function reconnectToServer(ip, mode) {
   if (mode) window.dewicomServerMode = mode;
   const targetIP   = window.dewicomServerIP || "127.0.0.1";
   const targetMode = window.dewicomServerMode || (targetIP === "127.0.0.1" ? "local" : "nodejs");
-  const useWS = (targetIP === "127.0.0.1" || targetMode === "apk" || targetMode === "local");
+  // WS natif uniquement si la page est servie par la WebView interne (127.0.0.1)
+  const useWS = (targetIP === "127.0.0.1" && (targetMode === "apk" || targetMode === "local"));
 
   console.log("[leader] Basculement →", targetIP, "mode:", targetMode, "ws:", useWS);
   addActivityEntry("Basculement vers le nouveau serveur leader…", "🔄", "#f59e0b");
@@ -213,9 +214,19 @@ async function startSession() {
   if (typeof window.DewiComAndroid !== "undefined" && !window.dewicomServerIP) {
     window.dewicomServerIP = window.DewiComAndroid.getServerIP() || "127.0.0.1";
   }
+  // Si la page est chargée depuis une IP LAN (navigateur externe), utiliser l'IP du serveur hôte
+  if (!window.dewicomServerIP) {
+    const hostIP = window.location.hostname;
+    const isLAN = hostIP && hostIP !== "127.0.0.1" && hostIP !== "localhost" && /^\d+\.\d+\.\d+\.\d+$/.test(hostIP);
+    if (isLAN) {
+      window.dewicomServerIP = hostIP;
+      window.dewicomServerMode = window.dewicomServerMode || "apk";
+    }
+  }
   const serverIP   = window.dewicomServerIP || "127.0.0.1";
   const serverMode = window.dewicomServerMode || (serverIP === "127.0.0.1" ? "local" : "nodejs");
-  const useNativeWS = (serverIP === "127.0.0.1" || serverMode === "apk" || serverMode === "local");
+  // WS natif uniquement si la page est servie par la WebView interne (127.0.0.1)
+  const useNativeWS = (serverIP === "127.0.0.1" && (serverMode === "apk" || serverMode === "local"));
 
   if (useNativeWS) {
     socket = makeNativeSocket(serverIP);

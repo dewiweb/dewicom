@@ -5,6 +5,14 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 
 ---
 
+## [1.1.12] — 2026-03-02
+
+### Corrigé
+- **APK socket.js** : navigateur externe (LAN) connecté à l'APK utilisait WS natif vers `127.0.0.1:3002` au lieu de Socket.io vers l'IP LAN — détection corrigée via `window.location.hostname`
+- **WS natif** : limité strictement à la WebView interne (`127.0.0.1`), Socket.io utilisé pour tout accès distant
+
+---
+
 ## [1.1.11] — 2026-03-02
 
 ### Corrigé
