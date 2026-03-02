@@ -26,15 +26,28 @@ app.use(express.static(path.join(__dirname, "../../shared/public")));
 
 // Get local IP
 function getLocalIP() {
-  const interfaces = os.networkInterfaces();
-  for (const name of Object.keys(interfaces)) {
-    for (const iface of interfaces[name]) {
-      if (iface.family === "IPv4" && !iface.internal) {
-        return iface.address;
-      }
+  const candidates = [];
+  for (const [name, ifaces] of Object.entries(os.networkInterfaces())) {
+    for (const iface of ifaces) {
+      if (iface.family !== "IPv4" || iface.internal) continue;
+      if (iface.address.startsWith("169.254.")) continue;
+      const lname = name.toLowerCase();
+      let score = 0;
+      if (lname.includes("virtualbox") || lname.includes("vmware") ||
+          lname.includes("vbox") || lname.includes("hyper-v") ||
+          lname.includes("loopback") || lname.includes("tap") ||
+          lname.includes("tun") || lname.includes("docker") ||
+          lname.startsWith("virbr") || lname.startsWith("veth") ||
+          lname.startsWith("br-") || lname.startsWith("lxc") ||
+          lname.startsWith("lxd")) score -= 10;
+      if (iface.address.startsWith("192.168.") || iface.address.startsWith("10.") ||
+          iface.address.startsWith("172.")) score += 5;
+      candidates.push({ address: iface.address, score });
     }
   }
-  return "localhost";
+  if (candidates.length === 0) return "localhost";
+  candidates.sort((a, b) => b.score - a.score);
+  return candidates[0].address;
 }
 
 // QR code endpoint

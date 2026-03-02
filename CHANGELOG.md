@@ -5,6 +5,17 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 
 ---
 
+## [1.1.3] — 2026-03-02
+
+### Ajouté
+- **QR Code fonctionnel** : endpoint `/qr` dans le serveur local embarqué (`local-server.js`), retourne `{ qr, url }` avec l'IP LAN réelle (pas `127.0.0.1`)
+- Dépendance `qrcode` ajoutée au desktop
+
+### Corrigé
+- `getLocalIP()` dans `server/index.js` (serveur Node.js LAN) utilise désormais le même scoring que le desktop (exclut APIPA, déprioritise interfaces virtuelles)
+
+---
+
 ## [1.1.2] — 2026-03-02
 
 ### Corrigé

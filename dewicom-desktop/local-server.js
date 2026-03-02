@@ -12,6 +12,7 @@ const dgram = require("dgram");
 const fs   = require("fs");
 
 const { version: APP_VERSION } = require("./package.json");
+const QRCode = require("qrcode");
 
 const MCAST_ADDR = "224.0.0.251";
 const MCAST_PORT = 9999;
@@ -130,6 +131,17 @@ function start() {
     // ── Routes ──────────────────────────────────────────────────────────────
     expressApp.get("/api/dewicom-discovery", (req, res) => {
       res.json({ service: "DewiCom", version: APP_VERSION, mode: "desktop-local" });
+    });
+
+    expressApp.get("/qr", async (req, res) => {
+      const ip  = getLocalIP();
+      const url = `http://${ip}:${LOCAL_PORT}`;
+      try {
+        const qr = await QRCode.toDataURL(url, { width: 300, margin: 2 });
+        res.json({ qr, url });
+      } catch (e) {
+        res.status(500).json({ error: e.message });
+      }
     });
 
     expressApp.use(express.static(PUBLIC_DIR));
