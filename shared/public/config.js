@@ -10,7 +10,14 @@ const CHANNELS_DEFAULT = [
 // Identifiant client persistant (survit aux reconnexions)
 let clientId = localStorage.getItem("dewicom-clientId");
 if (!clientId) {
-  clientId = crypto.randomUUID();
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    clientId = crypto.randomUUID();
+  } else {
+    clientId = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
+      const r = Math.random() * 16 | 0;
+      return (c === "x" ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+  }
   localStorage.setItem("dewicom-clientId", clientId);
 }
 
