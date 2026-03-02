@@ -213,11 +213,18 @@ function start() {
         if (chunk && Buffer.isBuffer(chunk)) {
           chunk = chunk.buffer.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength);
         }
+        // Déduplique les destinataires pour éviter envois multiples en director mode
+        const seen = new Set();
         talkChs.forEach(ch => {
           const room = io.sockets.adapter.rooms.get(ch);
-          const recipients = room ? room.size - 1 : 0;
-          if (recipients === 0) console.log(`[audio-chunk] ${user.name} → ${ch}: AUCUN destinataire (rooms: ${[...io.sockets.adapter.rooms.keys()].join(',')})`);
-          socket.to(ch).emit("audio-chunk", { from: user.name, fromId: socket.id, channel: ch, chunk });
+          if (!room) return;
+          room.forEach(sid => {
+            if (sid !== socket.id && !seen.has(sid)) {
+              seen.add(sid);
+              const dest = io.sockets.sockets.get(sid);
+              if (dest) dest.emit("audio-chunk", { from: user.name, fromId: socket.id, channel: ch, chunk });
+            }
+          });
         });
       });
 

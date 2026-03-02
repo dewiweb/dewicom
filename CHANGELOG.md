@@ -5,6 +5,13 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 
 ---
 
+## [1.1.19] — 2026-03-02
+
+### Corrigé
+- **Director mode audio** : `audio-chunk` envoyé N fois au même destinataire si celui-ci était présent dans plusieurs `talkChannels` — corrigé par déduplication des destinataires (`Set<WebSocket> seen`) dans `LocalWebServer.java`, `local-server.js` et `server/index.js`
+
+---
+
 ## [1.1.18] — 2026-03-02
 
 ### Corrigé

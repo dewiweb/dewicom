@@ -351,9 +351,16 @@ public class LocalWebServer {
                     case "audio-chunk": {
                         UserInfo user = socketUser.get(ws);
                         if (user == null) return;
-                        // Director mode : broadcast sur tous les talkChannels
+                        // Director mode : déduplique les destinataires sur tous les talkChannels
                         Set<String> talkChs = user.talkChannels.isEmpty() ? new HashSet<>(java.util.Collections.singleton(user.channel)) : user.talkChannels;
-                        for (String tch : talkChs) broadcastChannel(tch, text, ws);
+                        Set<WebSocket> seen = new HashSet<>();
+                        for (String tch : talkChs) {
+                            Set<WebSocket> sockets = channelSockets.get(tch);
+                            if (sockets == null) continue;
+                            for (WebSocket dest : new HashSet<>(sockets)) {
+                                if (dest != ws && dest.isOpen() && seen.add(dest)) dest.send(text);
+                            }
+                        }
                         break;
                     }
                     case "call-ring": {
@@ -384,7 +391,15 @@ public class LocalWebServer {
             UserInfo user = socketUser.get(ws);
             if (user == null) return;
             Set<String> talkChs = user.talkChannels.isEmpty() ? new HashSet<>(java.util.Collections.singleton(user.channel)) : user.talkChannels;
-            for (String tch : talkChs) broadcastChannelBinary(tch, buf, ws);
+            // Déduplique les destinataires pour éviter envois multiples en director mode
+            Set<WebSocket> seen = new HashSet<>();
+            for (String tch : talkChs) {
+                Set<WebSocket> sockets = channelSockets.get(tch);
+                if (sockets == null) continue;
+                for (WebSocket dest : new HashSet<>(sockets)) {
+                    if (dest != ws && dest.isOpen() && seen.add(dest)) dest.send(buf);
+                }
+            }
         }
 
         @Override

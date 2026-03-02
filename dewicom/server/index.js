@@ -203,12 +203,17 @@ io.on("connection", (socket) => {
     if (!user) return;
     const talkChannels = user.talkChannels?.length ? user.talkChannels : [payload.channel || user.channel];
     const chunk = payload.chunk;
+    // Déduplique les destinataires pour éviter envois multiples en director mode
+    const seen = new Set();
     talkChannels.forEach(channel => {
-      socket.to(channel).emit("audio-chunk", {
-        from: user.name,
-        fromId: socket.id,
-        channel,
-        chunk,
+      const room = io.sockets.adapter.rooms.get(channel);
+      if (!room) return;
+      room.forEach(sid => {
+        if (sid !== socket.id && !seen.has(sid)) {
+          seen.add(sid);
+          const dest = io.sockets.sockets.get(sid);
+          if (dest) dest.emit("audio-chunk", { from: user.name, fromId: socket.id, channel, chunk });
+        }
       });
     });
   });
