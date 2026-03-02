@@ -115,6 +115,10 @@ function reconnectToServer(newUrl) {
     showRingAlert(from, channel);
     addActivityEntry(`${from} appelle — ${getChannelName(channel)}`, "📞", "#f59e0b");
   });
+
+  socket.on("server-redirect", (newUrl) => {
+    reconnectToServer(newUrl);
+  });
 }
 
 // Écoute le changement de leader depuis Electron (sans rechargement de page)
@@ -251,6 +255,10 @@ async function startSession() {
   socket.on("call-ring", ({ from, channel }) => {
     showRingAlert(from, channel);
     addActivityEntry(`${from} appelle — ${getChannelName(channel)}`, "📞", "#f59e0b");
+  });
+
+  socket.on("server-redirect", (newUrl) => {
+    reconnectToServer(newUrl);
   });
 
   // Afficher l'écran principal

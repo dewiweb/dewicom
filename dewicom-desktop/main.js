@@ -249,13 +249,16 @@ async function discoverServer() {
       onLeaderElected: async (leaderIP) => {
         console.log(`[election] FOLLOWER — leader: ${leaderIP}`);
         sendToWindow("discovery-status", `Follower — leader: ${leaderIP}:3001`);
-        localServer.stop();
-        localServerRunning = false;
         // Détecte le protocole réel du leader (HTTP local ou HTTPS standalone)
         const detected = await checkServer(leaderIP, 3001);
         const protocol = detected?.protocol || "http";
         const url = `${protocol}://${leaderIP}:3001`;
         const newServer = { ip: leaderIP, port: 3001, protocol };
+        // Notifie les clients navigateur connectés au serveur local avant de l'arrêter
+        localServer.notifyRedirect(url);
+        await new Promise(r => setTimeout(r, 300)); // laisse le temps au message de partir
+        localServer.stop();
+        localServerRunning = false;
         if (discoveredServer) {
           // Page déjà chargée → basculer sans rechargement
           discoveredServer = newServer;

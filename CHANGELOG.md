@@ -5,6 +5,13 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 
 ---
 
+## [1.1.9] — 2026-03-02
+
+### Ajouté
+- **Reconnexion transparente pour les clients navigateur LAN** : quand le leader change, le serveur local émet `server-redirect` aux clients connectés (délai 300ms avant shutdown) → `reconnectToServer(newUrl)` côté client sans rechargement de page
+
+---
+
 ## [1.1.8] — 2026-03-02
 
 ### Amélioré

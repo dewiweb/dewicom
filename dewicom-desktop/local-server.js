@@ -293,10 +293,14 @@ function start() {
   });
 }
 
+function notifyRedirect(newUrl) {
+  if (io) io.emit("server-redirect", newUrl);
+}
+
 function stop() {
   stopAnnouncing();
   if (httpServer) { httpServer.close(); httpServer = null; }
   if (io) { io.close(); io = null; }
 }
 
-module.exports = { start, stop };
+module.exports = { start, stop, notifyRedirect };
