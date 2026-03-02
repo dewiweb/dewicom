@@ -5,6 +5,16 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 
 ---
 
+## [1.1.16] — 2026-03-02
+
+### Corrigé
+- **LocalWebServer.java** : `channel-state` jamais envoyé → badges de participants vides — ajout de `broadcastChannelState()` après `join`/`switch-channel`/`disconnect`
+- **LocalWebServer.java** : `call-ring` diffusait à tous les canaux (`broadcastAllExcept`) au lieu du canal du caller (`broadcastChannel`)
+- **LocalWebServer.java** : `user-left` sur disconnect diffusait à tous les canaux au lieu du seul canal de l'utilisateur
+- **LocalWebServer.java** : couleurs des canaux corrigées pour correspondre à celles du desktop/navigateur
+
+---
+
 ## [1.1.15] — 2026-03-02
 
 ### Corrigé

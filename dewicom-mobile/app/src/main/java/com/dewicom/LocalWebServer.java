@@ -196,7 +196,8 @@ public class LocalWebServer {
                 if (user != null) {
                     Set<WebSocket> ch = channelSockets.get(user[1]);
                     if (ch != null) ch.remove(ws);
-                    broadcastAll("42[\"user-left\",{\"name\":\"" + user[0] + "\",\"channel\":\"" + user[1] + "\"}]");
+                    broadcastChannel(user[1], "42[\"user-left\",{\"name\":\"" + user[0] + "\",\"channel\":\"" + user[1] + "\"}]", ws);
+                    broadcastChannelState();
                     Log.d(TAG, user[0] + " déconnecté");
                 }
             }
@@ -257,6 +258,7 @@ public class LocalWebServer {
                         }
                         ws.send("42[\"channels-init\"," + buildChannelsJson() + "]");
                         broadcastChannel(channel, "42[\"user-joined\",{\"name\":\"" + name + "\",\"channel\":\"" + channel + "\"}]", ws);
+                        broadcastChannelState();
                         Log.d(TAG, name + " rejoint " + channel);
                         break;
                     }
@@ -273,6 +275,7 @@ public class LocalWebServer {
                             channelSockets.computeIfAbsent(newCh, k -> new HashSet<>()).add(ws);
                         }
                         broadcastChannel(newCh, "42[\"user-joined\",{\"name\":\"" + user[0] + "\",\"channel\":\"" + newCh + "\"}]", ws);
+                        broadcastChannelState();
                         break;
                     }
                     case "ptt-start": {
@@ -296,7 +299,7 @@ public class LocalWebServer {
                     case "call-ring": {
                         String[] user = socketUser.get(ws);
                         if (user == null) return;
-                        broadcastAllExcept("42[\"call-ring\",{\"from\":\"" + user[0] + "\",\"channel\":\"" + user[1] + "\"}]", ws);
+                        broadcastChannel(user[1], "42[\"call-ring\",{\"from\":\"" + user[0] + "\",\"channel\":\"" + user[1] + "\"}]", ws);
                         break;
                     }
                 }
@@ -373,14 +376,39 @@ public class LocalWebServer {
 
     private String buildChannelsJson() {
         StringBuilder sb = new StringBuilder("[");
-        String[][] defs = {{"general","Général","#4CAF50"},{"foh","FOH","#2196F3"},{"plateau","Plateau","#FF9800"},{"lumiere","Lumière","#9C27B0"},{"regie","Régie","#F44336"}};
+        String[][] defs = {{"general","Général","#6b7280"},{"foh","FOH Son","#3b82f6"},{"plateau","Plateau","#f97316"},{"lumiere","Lumière","#a855f7"},{"regie","Régie","#22c55e"}};
         for (int i = 0; i < defs.length; i++) {
             if (i > 0) sb.append(",");
-            String ch = defs[i][0];
-            int n = channelSockets.containsKey(ch) ? channelSockets.get(ch).size() : 0;
-            sb.append("{\"id\":\"").append(ch).append("\",\"name\":\"").append(defs[i][1]).append("\",\"color\":\"").append(defs[i][2]).append("\",\"users\":").append(n).append("}");
+            sb.append("{\"id\":\"").append(defs[i][0]).append("\",\"name\":\"").append(defs[i][1]).append("\",\"color\":\"").append(defs[i][2]).append("\"}");
         }
         return sb.append("]").toString();
+    }
+
+    private synchronized void broadcastChannelState() {
+        // Format attendu par le JS : { channelId: { users: [{id, name}], name, color } }
+        String[][] defs = {{"general","Général","#6b7280"},{"foh","FOH Son","#3b82f6"},{"plateau","Plateau","#f97316"},{"lumiere","Lumière","#a855f7"},{"regie","Régie","#22c55e"}};
+        StringBuilder sb = new StringBuilder("{" );
+        for (int i = 0; i < defs.length; i++) {
+            String chId = defs[i][0];
+            if (i > 0) sb.append(",");
+            sb.append("\"").append(chId).append("\":{\"name\":\"").append(defs[i][1]).append("\",\"color\":\"").append(defs[i][2]).append("\",\"users\":");
+            Set<WebSocket> sockets = channelSockets.get(chId);
+            sb.append("[");
+            if (sockets != null) {
+                boolean first = true;
+                for (WebSocket ws : sockets) {
+                    String[] u = socketUser.get(ws);
+                    if (u != null && u[1].equals(chId)) {
+                        if (!first) sb.append(",");
+                        sb.append("{\"id\":\"").append(ws.hashCode()).append("\",\"name\":\"").append(u[0].replace("\"", "")).append("\"}");
+                        first = false;
+                    }
+                }
+            }
+            sb.append("]}");
+        }
+        sb.append("}");
+        broadcastAll("42[\"channel-state\"," + sb + "]");
     }
 
     private String extractJson(String json, String key) {
