@@ -1,7 +1,15 @@
 package com.dewicom;
 
 import android.content.Context;
+import android.graphics.Bitmap;
+import android.util.Base64;
 import android.util.Log;
+
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.EncodeHintType;
+import com.google.zxing.WriterException;
+import com.google.zxing.common.BitMatrix;
+import com.google.zxing.qrcode.QRCodeWriter;
 
 import fi.iki.elonen.NanoHTTPD;
 
@@ -9,12 +17,14 @@ import org.java_websocket.WebSocket;
 import org.java_websocket.handshake.ClientHandshake;
 import org.java_websocket.server.WebSocketServer;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -127,6 +137,24 @@ public class LocalWebServer {
                 Response r = newFixedLengthResponse(Response.Status.OK, "application/json", json);
                 r.addHeader("Access-Control-Allow-Origin", "*");
                 return r;
+            }
+
+            if (uri.equals("/qr")) {
+                try {
+                    NetworkDiscovery.SubnetInfo info = NetworkDiscovery.getSubnetInfo(context);
+                    String ip = info.deviceIPv4 != null ? info.deviceIPv4 : "127.0.0.1";
+                    String url = "http://" + ip + ":" + HTTP_PORT;
+                    String qrDataUrl = generateQrDataUrl(url);
+                    String json = "{\"qr\":\"" + qrDataUrl + "\",\"url\":\"" + url + "\"}";
+                    Response r = newFixedLengthResponse(Response.Status.OK, "application/json", json);
+                    r.addHeader("Access-Control-Allow-Origin", "*");
+                    return r;
+                } catch (Exception e) {
+                    Log.e(TAG, "Erreur /qr", e);
+                    Response r = newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "application/json", "{\"error\":\"" + e.getMessage() + "\"}");
+                    r.addHeader("Access-Control-Allow-Origin", "*");
+                    return r;
+                }
             }
 
             String path = uri.equals("/") ? "public/index.html" : "public" + uri;
@@ -295,6 +323,23 @@ public class LocalWebServer {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private String generateQrDataUrl(String content) throws WriterException {
+        Map<EncodeHintType, Object> hints = new EnumMap<>(EncodeHintType.class);
+        hints.put(EncodeHintType.MARGIN, 1);
+        BitMatrix matrix = new QRCodeWriter().encode(content, BarcodeFormat.QR_CODE, 300, 300, hints);
+        int w = matrix.getWidth(), h = matrix.getHeight();
+        int[] pixels = new int[w * h];
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+                pixels[y * w + x] = matrix.get(x, y) ? 0xFF000000 : 0xFFFFFFFF;
+        Bitmap bmp = Bitmap.createBitmap(pixels, w, h, Bitmap.Config.ARGB_8888);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        bmp.compress(Bitmap.CompressFormat.PNG, 100, out);
+        String b64 = Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP);
+        return "data:image/png;base64," + b64;
+    }
+
     private synchronized void broadcastChannel(String channel, String msg, WebSocket sender) {
         Set<WebSocket> sockets = channelSockets.get(channel);
         if (sockets == null) return;

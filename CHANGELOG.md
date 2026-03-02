@@ -8,11 +8,14 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 ## [1.1.3] — 2026-03-02
 
 ### Ajouté
-- **QR Code fonctionnel** : endpoint `/qr` dans le serveur local embarqué (`local-server.js`), retourne `{ qr, url }` avec l'IP LAN réelle (pas `127.0.0.1`)
-- Dépendance `qrcode` ajoutée au desktop
+- **QR Code fonctionnel sur toutes les plateformes** :
+  - Desktop : endpoint `/qr` dans `local-server.js`, retourne `{ qr, url }` avec l'IP LAN réelle
+  - APK Android : endpoint `/qr` dans `LocalWebServer.java` via ZXing Core → génère le QR en PNG base64
+  - Dépendance `qrcode` (desktop) et `com.google.zxing:core:3.5.3` (Android) ajoutées
 
 ### Corrigé
 - `getLocalIP()` dans `server/index.js` (serveur Node.js LAN) utilise désormais le même scoring que le desktop (exclut APIPA, déprioritise interfaces virtuelles)
+- `versionCode` Android bumped à 3, `versionName` → `"1.1.3"`
 
 ---
 
