@@ -5,6 +5,14 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 
 ---
 
+## [1.2.1] — 2026-03-02
+
+### Corrigé
+- **Boucle élection leader** : quand un nœud recevait un `LEADER` d'ID inférieur, il relançait `_startElection()` → l'autre répondait `LEADER` → boucle infinie → déconnexions répétées. Fix : on ne challenge que si on n'est pas déjà `CANDIDATE` (le timer `ELECTION_WAIT` se charge de la proclamation dans ce cas) — `LeaderElection.java` et `leader-election.js`
+- **Workflow CI** : extraction CHANGELOG réécrite en Python (awk échouait sur les délimiteurs) ; glob artefacts élargi à `artifacts/**/*` pour matcher la structure réelle du download
+
+---
+
 ## [1.2.0] — 2026-03-02
 
 ### Nouvelles fonctionnalités

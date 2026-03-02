@@ -153,45 +153,76 @@ jobs:
         with:
           path: artifacts/
 
+      - name: List artifacts (debug)
+        run: find artifacts/ -type f | sort || echo "No artifacts found"
+
       - name: Extract release notes from CHANGELOG
         id: notes
         run: |
           TAG="${{ github.ref_name }}"
           VERSION="${TAG#v}"
 
-          # Extrait le bloc du CHANGELOG pour ce tag
-          SECTION=$(awk "/^## \[${VERSION}\]/,/^---$/" CHANGELOG.md | head -n -1)
+          python3 - <<'PYEOF' > release_notes.md
+          import re, sys
 
-          if [ -z "$SECTION" ]; then
-            SECTION="Voir [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/master/CHANGELOG.md) pour le détail des changements."
-          fi
+          version = "$VERSION"
+          repo    = "${{ github.repository }}"
 
-          # Détermine la dernière version x.x.0 précédente pour le résumé
-          MAJOR_MINOR=$(echo "$VERSION" | cut -d. -f1-2)
-          PREV_MAJOR_MINOR=$(awk '/^## \[/ {
-            match($0, /\[([0-9]+)\.([0-9]+)\.0\]/, arr)
-            if (arr[0] != "" && $0 !~ /\['"${VERSION}"'\]/) { print arr[1]"."arr[2]".0"; exit }
-          }' CHANGELOG.md)
+          with open("CHANGELOG.md", encoding="utf-8") as f:
+              content = f.read()
 
-          if [ -n "$PREV_MAJOR_MINOR" ] && [ "$VERSION" != "${MAJOR_MINOR}.0" ]; then
-            SINCE_SECTION=$(awk "/^## \[${MAJOR_MINOR}\\.0\]/,/^## \[${PREV_MAJOR_MINOR}\]/" CHANGELOG.md \
-              | grep -v "^## \[${PREV_MAJOR_MINOR}\]" | head -n -1)
-            SUMMARY="## Changements depuis v${MAJOR_MINOR}.0"$'\n'"${SINCE_SECTION}"$'\n\n---'$'\n\n'
-          else
-            SUMMARY=""
-          fi
+          # Découpe en sections délimitées par "---"
+          blocks = re.split(r'\n---\n', content)
 
-          BODY="${SUMMARY}${SECTION}"$'\n\n'"---"$'\n'"## Installation"$'\n'
-          BODY+=$'\n''| Plateforme | Fichier | Notes |'
-          BODY+=$'\n''|---|---|---|'
-          BODY+=$'\n''| 🐧 Linux | `DewiCom-*.AppImage` | `chmod +x` puis lancer |'
-          BODY+=$'\n''| 🪟 Windows | `DewiCom-Setup-*.exe` | Installeur NSIS |'
-          BODY+=$'\n''| 🤖 Android | `DewiCom-*.apk` | Activer "sources inconnues" |'
-          BODY+=$'\n\n''> **Réseau** : LAN local (WiFi/Ethernet) · Ports UDP 9998-9999 (multicast) · TCP 3001'
+          def find_section(ver):
+              for block in blocks:
+                  if re.search(r'^## \[' + re.escape(ver) + r'\]', block, re.MULTILINE):
+                      return block.strip()
+              return None
 
-          # Écrit dans un fichier pour éviter les problèmes de quotes dans les variables
-          echo "$BODY" > release_notes.md
-          echo "notes_file=release_notes.md" >> $GITHUB_OUTPUT
+          section = find_section(version)
+
+          if not section:
+              print(f"Voir [CHANGELOG.md](https://github.com/{repo}/blob/master/CHANGELOG.md) pour le détail des changements.")
+          else:
+              # Pour une version x.x.0, afficher directement la section
+              # Pour une version x.x.N (N>0), ajouter un résumé depuis x.x.0
+              parts = version.split(".")
+              if len(parts) == 3 and parts[2] != "0":
+                  base = f"{parts[0]}.{parts[1]}.0"
+                  # Collecte toutes les sections depuis base jusqu'à version
+                  in_range = False
+                  summary_blocks = []
+                  for block in blocks:
+                      if re.search(r'^## \[' + re.escape(version) + r'\]', block, re.MULTILINE):
+                          in_range = True
+                      if in_range:
+                          summary_blocks.append(block.strip())
+                      if re.search(r'^## \[' + re.escape(base) + r'\]', block, re.MULTILINE):
+                          break
+                  if len(summary_blocks) > 1:
+                      print(f"## Changements depuis v{base}\n")
+                      for b in summary_blocks:
+                          print(b)
+                          print()
+                      print("---\n")
+                  else:
+                      print(section)
+              else:
+                  print(section)
+
+          print()
+          print("---")
+          print("## Installation")
+          print()
+          print("| Plateforme | Fichier | Notes |")
+          print("|---|---|---|")
+          print("| 🐧 Linux | `DewiCom-*.AppImage` | `chmod +x` puis lancer |")
+          print("| 🪟 Windows | `DewiCom-Setup-*.exe` | Installeur NSIS |")
+          print("| 🤖 Android | `DewiCom-*.apk` | Activer \"sources inconnues\" |")
+          print()
+          print("> **Réseau** : LAN local (WiFi/Ethernet) · Ports UDP 9998-9999 (multicast) · TCP 3001")
+          PYEOF
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -201,8 +232,8 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
           body_path: release_notes.md
           files: |
-            artifacts/electron-linux/*.AppImage
-            artifacts/electron-windows/*.exe
-            artifacts/android-apk/**/*.apk
+            artifacts/**/*.AppImage
+            artifacts/**/*.exe
+            artifacts/**/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
