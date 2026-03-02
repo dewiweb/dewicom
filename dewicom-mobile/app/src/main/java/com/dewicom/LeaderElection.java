@@ -56,10 +56,12 @@ public class LeaderElection {
     private volatile String leaderIP      = null;
     private final AtomicLong lastHeartbeat = new AtomicLong(0);
     private final AtomicReference<String> currentLeaderIP = new AtomicReference<>(null);
+    private volatile boolean electionPending = false; // debounce : une seule élection à la fois
 
     private ScheduledExecutorService scheduler;
     private ScheduledFuture<?> heartbeatTask;
     private ScheduledFuture<?> watchdogTask;
+    private ScheduledFuture<?> electionTask;
     private Thread listenThread;
     private volatile boolean running = false;
 
@@ -91,8 +93,10 @@ public class LeaderElection {
 
     public void stop() {
         running = false;
-        if (heartbeatTask != null) heartbeatTask.cancel(false);
-        if (watchdogTask  != null) watchdogTask.cancel(false);
+        electionPending = false;
+        if (electionTask  != null) { electionTask.cancel(false);  electionTask  = null; }
+        if (heartbeatTask != null) { heartbeatTask.cancel(false); heartbeatTask = null; }
+        if (watchdogTask  != null) { watchdogTask.cancel(false);  watchdogTask  = null; }
         if (scheduler     != null) scheduler.shutdownNow();
         if (listenThread  != null) listenThread.interrupt();
         try { if (recvSocket != null) recvSocket.close(); } catch (Exception ignored) {}
@@ -106,87 +110,96 @@ public class LeaderElection {
 
     // ── Élection ──────────────────────────────────────────────────────────────
 
-    private void startElection() {
+    private synchronized void startElection() {
         if (!running) return;
-        Log.d(TAG, "Lancement élection (nodeId=" + myNodeId + ")");
+        if (electionPending) return; // debounce : une seule élection à la fois
+        electionPending = true;
         state = State.CANDIDATE;
+        Log.d(TAG, "Lancement élection (nodeId=" + myNodeId + ")");
         broadcast("ELECTION:" + myNodeId + ":" + myIP);
 
-        // Après ELECTION_WAIT_MS, si on n'a reçu aucune réponse d'un plus grand ID → on gagne
-        scheduler.schedule(() -> {
-            if (state == State.CANDIDATE) {
-                becomeLeader();
-            }
+        if (electionTask != null) electionTask.cancel(false);
+        electionTask = scheduler.schedule(() -> {
+            electionPending = false;
+            if (state == State.CANDIDATE) becomeLeader();
         }, ELECTION_WAIT_MS, TimeUnit.MILLISECONDS);
     }
 
-    private void becomeLeader() {
+    private synchronized void becomeLeader() {
         if (!running) return;
         state = State.LEADER;
         currentLeaderIP.set(myIP);
         Log.d(TAG, "Je suis le LEADER (" + myIP + ")");
         broadcast("LEADER:" + myNodeId + ":" + myIP);
         listener.onBecomeLeader(myIP);
-        startHeartbeat();
         stopWatchdog();
+        startHeartbeat();
     }
 
-    private void becomeFollower(String newLeaderIP) {
+    private synchronized void becomeFollower(String newLeaderIP) {
         if (!running) return;
         boolean changed = !newLeaderIP.equals(currentLeaderIP.get());
+        // Annule toute élection en cours
+        if (electionTask != null) { electionTask.cancel(false); electionTask = null; }
+        electionPending = false;
         state = State.FOLLOWER;
         currentLeaderIP.set(newLeaderIP);
         lastHeartbeat.set(System.currentTimeMillis());
         Log.d(TAG, "Je suis FOLLOWER, leader=" + newLeaderIP);
-        if (changed) {
-            listener.onLeaderElected(newLeaderIP);
-        }
+        if (changed) listener.onLeaderElected(newLeaderIP);
         stopHeartbeat();
         startWatchdog();
     }
 
     // ── Traitement des messages ────────────────────────────────────────────────
 
-    private void handleMessage(String msg, String senderIP) {
+    private synchronized void handleMessage(String msg, String senderIP) {
         if (!running) return;
         String[] parts = msg.split(":");
         if (parts.length < 3) return;
-        String type      = parts[0];
-        long   senderId  = Long.parseLong(parts[1]);
+        String type       = parts[0];
+        long   senderId   = Long.parseLong(parts[1]);
         String senderNode = parts[2];
 
         switch (type) {
             case "ELECTION":
                 if (senderId > myNodeId) {
-                    // L'expéditeur a un ID plus grand → on se défère, on reste candidat/follower
-                    Log.d(TAG, "ELECTION reçue d'un plus grand nodeId (" + senderId + ") — on se défère");
-                    state = State.FOLLOWER; // annule notre candidature
-                } else if (senderId < myNodeId) {
-                    // Notre ID est plus grand → on répond ELECTION pour le décourager
+                    // ID supérieur → annule notre candidature, reset heartbeat pour laisser
+                    // le temps au supérieur de se proclamer avant que le watchdog intervienne
+                    Log.d(TAG, "ELECTION d'un plus grand nodeId (" + senderId + ") — déférence");
+                    if (state == State.CANDIDATE) {
+                        if (electionTask != null) { electionTask.cancel(false); electionTask = null; }
+                        electionPending = false;
+                        state = State.FOLLOWER;
+                    }
+                    lastHeartbeat.set(System.currentTimeMillis());
+                } else if (senderId < myNodeId && !electionPending) {
+                    // Notre ID est plus grand → on s'annonce si pas déjà candidat
                     broadcast("ELECTION:" + myNodeId + ":" + myIP);
                 }
                 break;
 
             case "LEADER":
                 Log.d(TAG, "LEADER reçu: " + senderNode + " (nodeId=" + senderId + ")");
-                if (senderId > myNodeId) {
-                    // Le leader a un plus grand ID — on se soumet
+                if (senderId >= myNodeId) {
+                    // ID >= au nôtre → on se soumet (>= évite split-brain si IDs égaux)
                     becomeFollower(senderNode);
-                } else if (state != State.CANDIDATE) {
-                    // Notre ID est plus grand et on n'est pas déjà en train d'élire — on challenge
-                    Log.d(TAG, "LEADER inférieur reçu (" + senderId + " < " + myNodeId + ") — challenge");
+                } else if (!electionPending) {
+                    // Notre ID est plus grand et pas d'élection en cours → on challenge
+                    Log.d(TAG, "LEADER inférieur (" + senderId + " < " + myNodeId + ") — challenge");
                     startElection();
                 }
-                // Si déjà CANDIDATE : le timer ELECTION_WAIT va nous proclamer leader — rien à faire
                 break;
 
             case "HEARTBEAT":
                 if (senderNode.equals(currentLeaderIP.get())) {
+                    // Heartbeat du leader connu → reset watchdog
                     lastHeartbeat.set(System.currentTimeMillis());
-                } else if (state == State.FOLLOWER && senderId > myNodeId) {
-                    // Heartbeat d'un leader qu'on ne connaissait pas encore
+                } else if (senderId > myNodeId) {
+                    // Heartbeat d'un nœud supérieur inconnu comme leader → on le reconnaît
                     becomeFollower(senderNode);
                 }
+                // Heartbeat d'un nœud inférieur (on est LEADER) → ignoré
                 break;
         }
     }

@@ -70,9 +70,10 @@ class LeaderElection {
     this.onBecomeLeader  = callbacks.onBecomeLeader  || (() => {});
     this.onLeaderElected = callbacks.onLeaderElected || (() => {});
 
-    this._heartbeatTimer = null;
-    this._watchdogTimer  = null;
-    this._electionTimer  = null;
+    this._heartbeatTimer  = null;
+    this._watchdogTimer   = null;
+    this._electionTimer   = null;
+    this._electionPending = false; // debounce : une seule élection à la fois
 
     console.log(`[election] Init — IP: ${this.myIP}, nodeId: ${this.myNodeId}`);
   }
@@ -80,7 +81,6 @@ class LeaderElection {
   start() {
     this.running = true;
     this._openSocket();
-    // Délai aléatoire pour éviter les collisions
     const delay = 500 + Math.random() * 1000;
     setTimeout(() => this._startElection(), delay);
   }
@@ -90,6 +90,7 @@ class LeaderElection {
     clearInterval(this._heartbeatTimer);
     clearInterval(this._watchdogTimer);
     clearTimeout(this._electionTimer);
+    this._electionPending = false;
     try { this._socket?.close(); } catch (e) {}
   }
 
@@ -102,7 +103,7 @@ class LeaderElection {
     this._socket = dgram.createSocket({ type: "udp4", reuseAddr: true });
 
     this._socket.on("message", (msg, rinfo) => {
-      if (rinfo.address === this.myIP) return; // ignore nos propres messages
+      if (rinfo.address === this.myIP) return;
       this._handleMessage(msg.toString("utf8"), rinfo.address);
     });
 
@@ -133,12 +134,15 @@ class LeaderElection {
 
   _startElection() {
     if (!this.running) return;
-    console.log(`[election] Lancement (nodeId=${this.myNodeId})`);
+    if (this._electionPending) return; // debounce : déjà une élection en cours
+    this._electionPending = true;
     this.state = "CANDIDATE";
+    console.log(`[election] Lancement (nodeId=${this.myNodeId})`);
     this._broadcast(`ELECTION:${this.myNodeId}:${this.myIP}`);
 
     clearTimeout(this._electionTimer);
     this._electionTimer = setTimeout(() => {
+      this._electionPending = false;
       if (this.state === "CANDIDATE") this._becomeLeader();
     }, ELECTION_WAIT);
   }
@@ -150,13 +154,16 @@ class LeaderElection {
     console.log(`[election] LEADER élu: ${this.myIP}`);
     this._broadcast(`LEADER:${this.myNodeId}:${this.myIP}`);
     this.onBecomeLeader(this.myIP);
-    this._startHeartbeat();
     this._stopWatchdog();
+    this._startHeartbeat();
   }
 
   _becomeFollower(newLeaderIP) {
     if (!this.running) return;
     const changed = newLeaderIP !== this.leaderIP;
+    // Annule toute élection en cours
+    clearTimeout(this._electionTimer);
+    this._electionPending = false;
     this.state    = "FOLLOWER";
     this.leaderIP = newLeaderIP;
     this.lastHeartbeat = Date.now();
@@ -177,33 +184,44 @@ class LeaderElection {
     switch (type) {
       case "ELECTION":
         if (senderId > this.myNodeId) {
-          // L'autre a un plus grand ID → on annule notre candidature
-          this.state = "FOLLOWER";
+          // L'autre a un plus grand ID → on annule notre candidature et on reset le watchdog
+          // pour lui laisser le temps de se proclamer avant qu'on re-déclenche une élection
+          if (this.state === "CANDIDATE") {
+            clearTimeout(this._electionTimer);
+            this._electionPending = false;
+            this.state = "FOLLOWER";
+          }
+          // Reset le lastHeartbeat pour ne pas déclencher le watchdog trop tôt
+          this.lastHeartbeat = Date.now();
         } else if (senderId < this.myNodeId) {
-          // Notre ID est plus grand → on répond ELECTION
-          this._broadcast(`ELECTION:${this.myNodeId}:${this.myIP}`);
+          // Notre ID est plus grand → on s'annonce ELECTION si pas déjà candidat
+          if (!this._electionPending) {
+            this._broadcast(`ELECTION:${this.myNodeId}:${this.myIP}`);
+          }
         }
         break;
 
       case "LEADER":
         console.log(`[election] LEADER reçu: ${senderNode} (nodeId=${senderId})`);
-        if (senderId > this.myNodeId) {
-          // Le leader a un plus grand ID — on se soumet
+        if (senderId >= this.myNodeId) {
+          // Le leader a un ID >= au nôtre — on se soumet (>= évite split-brain si IDs égaux)
           this._becomeFollower(senderNode);
-        } else if (this.state !== "CANDIDATE") {
-          // Notre ID est plus grand et on n'est pas déjà en train d'élire — on challenge
-          console.log(`[election] LEADER inférieur reçu (${senderId} < ${this.myNodeId}) — challenge`);
+        } else if (!this._electionPending) {
+          // Notre ID est plus grand et pas d'élection en cours — on challenge
+          console.log(`[election] LEADER inférieur (${senderId} < ${this.myNodeId}) — challenge`);
           this._startElection();
         }
-        // Si déjà CANDIDATE : le timer ELECTION_WAIT va nous proclamer leader — rien à faire
         break;
 
       case "HEARTBEAT":
         if (senderNode === this.leaderIP) {
+          // Heartbeat du leader connu : reset watchdog
           this.lastHeartbeat = Date.now();
-        } else if (this.state === "FOLLOWER" && senderId > this.myNodeId) {
+        } else if (senderId > this.myNodeId) {
+          // Heartbeat d'un nœud supérieur inconnu comme leader → on le reconnaît
           this._becomeFollower(senderNode);
         }
+        // Heartbeat d'un nœud inférieur alors qu'on est LEADER → on ignore
         break;
     }
   }
@@ -213,7 +231,7 @@ class LeaderElection {
   _startHeartbeat() {
     this._stopHeartbeat();
     this._heartbeatTimer = setInterval(() => {
-      if (this.state === "LEADER") {
+      if (this.state === "LEADER" && this.running) {
         this._broadcast(`HEARTBEAT:${this.myNodeId}:${this.myIP}`);
       }
     }, HEARTBEAT_INTERVAL);

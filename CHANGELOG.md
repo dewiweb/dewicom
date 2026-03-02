@@ -5,6 +5,19 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 
 ---
 
+## [1.2.3] — 2026-03-02
+
+### Corrigé
+- **Boucle élection + double-leader (refonte complète)** — `LeaderElection.java` et `leader-election.js` :
+  - `electionPending` debounce : une seule élection active à la fois, prevents re-entrée
+  - `becomeFollower()` annule le timer d'élection en cours (`electionTask.cancel()`)
+  - `ELECTION` d'un ID supérieur : reset `lastHeartbeat` pour laisser le temps au supérieur de se proclamer sans que le watchdog re-déclenche une élection trop tôt
+  - `LEADER` d'un ID `>=` (au lieu de `>`) : évite le split-brain quand deux nœuds ont le même nodeId
+  - `handleMessage`, `startElection`, `becomeLeader`, `becomeFollower` : `synchronized` en Java pour éviter les race conditions entre threads scheduler et thread réseau
+  - Watchdog : reset `lastHeartbeat` sur réception de `HEARTBEAT` d'un nœud supérieur inconnu → `becomeFollower` immédiat
+
+---
+
 ## [1.2.2] — 2026-03-02
 
 ### Corrigé
