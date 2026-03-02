@@ -169,7 +169,14 @@ public class LeaderElection {
 
             case "LEADER":
                 Log.d(TAG, "LEADER reçu: " + senderNode + " (nodeId=" + senderId + ")");
-                becomeFollower(senderNode);
+                if (senderId > myNodeId) {
+                    // Le leader a un plus grand ID — on se soumet
+                    becomeFollower(senderNode);
+                } else {
+                    // Notre ID est plus grand — on challenge et relance l'élection
+                    Log.d(TAG, "LEADER inférieur reçu (" + senderId + " < " + myNodeId + ") — challenge");
+                    startElection();
+                }
                 break;
 
             case "HEARTBEAT":

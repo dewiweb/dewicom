@@ -187,7 +187,14 @@ class LeaderElection {
 
       case "LEADER":
         console.log(`[election] LEADER reçu: ${senderNode} (nodeId=${senderId})`);
-        this._becomeFollower(senderNode);
+        if (senderId > this.myNodeId) {
+          // Le leader a un plus grand ID — on se soumet
+          this._becomeFollower(senderNode);
+        } else {
+          // Notre ID est plus grand — on challenge et relance l'élection
+          console.log(`[election] LEADER inférieur reçu (${senderId} < ${this.myNodeId}) — challenge`);
+          this._startElection();
+        }
         break;
 
       case "HEARTBEAT":

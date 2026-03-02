@@ -5,6 +5,14 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 
 ---
 
+## [1.1.18] — 2026-03-02
+
+### Corrigé
+- **Élection leader** : bug Bully — un nœud se soumettait à un `LEADER` d'ID inférieur au sien ; désormais il challenge et relance l'élection (fix dans `LeaderElection.java` et `leader-election.js`)
+- **Desktop vs APK** : le desktop (nodeId = IP + 2³²) gagne maintenant correctement l'élection face à un APK déjà leader
+
+---
+
 ## [1.1.17] — 2026-03-02
 
 ### Ajouté
