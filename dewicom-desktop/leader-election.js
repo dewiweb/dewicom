@@ -6,6 +6,8 @@
  */
 const dgram = require("dgram");
 const os    = require("os");
+const fs    = require("fs");
+const path  = require("path");
 
 const MCAST_ADDR         = "224.0.0.251";
 const ELECT_PORT         = 9998;
@@ -13,13 +15,40 @@ const HEARTBEAT_INTERVAL = 2000;
 const LEADER_TIMEOUT     = 6000;
 const ELECTION_WAIT      = 2000;
 
+function getForcedInterface() {
+  try {
+    const { app } = require("electron");
+    const configPath = path.join(app.getPath("userData"), "server-config.json");
+    const saved = JSON.parse(fs.readFileSync(configPath, "utf8"));
+    return saved.forcedInterface || null;
+  } catch (e) { return null; }
+}
+
 function getLocalIP() {
-  for (const ifaces of Object.values(os.networkInterfaces())) {
+  const forced = getForcedInterface();
+  if (forced) return forced;
+  const candidates = [];
+  for (const [name, ifaces] of Object.entries(os.networkInterfaces())) {
     for (const iface of ifaces) {
-      if (iface.family === "IPv4" && !iface.internal) return iface.address;
+      if (iface.family !== "IPv4" || iface.internal) continue;
+      if (iface.address.startsWith("169.254.")) continue; // APIPA — pas de routeur
+      const lname = name.toLowerCase();
+      let score = 0;
+      if (lname.includes("virtualbox") || lname.includes("vmware") ||
+          lname.includes("vbox") || lname.includes("hyper-v") ||
+          lname.includes("loopback") || lname.includes("tap") ||
+          lname.includes("tun") || lname.includes("docker") ||
+          lname.startsWith("virbr") || lname.startsWith("veth") ||
+          lname.startsWith("br-") || lname.startsWith("lxc") ||
+          lname.startsWith("lxd")) score -= 10;
+      if (iface.address.startsWith("192.168.") || iface.address.startsWith("10.") ||
+          iface.address.startsWith("172.")) score += 5;
+      candidates.push({ address: iface.address, score });
     }
   }
-  return "127.0.0.1";
+  if (candidates.length === 0) return "127.0.0.1";
+  candidates.sort((a, b) => b.score - a.score);
+  return candidates[0].address;
 }
 
 function ipToNodeId(ip) {
@@ -81,8 +110,10 @@ class LeaderElection {
       if (this.running) console.warn("[election] Socket error:", e.message);
     });
 
-    this._socket.bind(ELECT_PORT, () => {
-      this._socket.addMembership(MCAST_ADDR);
+    this._socket.bind(ELECT_PORT, "0.0.0.0", () => {
+      try { this._socket.addMembership(MCAST_ADDR, this.myIP); } catch (e) {
+        try { this._socket.addMembership(MCAST_ADDR); } catch (e2) {}
+      }
       console.log(`[election] Écoute ${MCAST_ADDR}:${ELECT_PORT}`);
     });
   }
@@ -90,7 +121,11 @@ class LeaderElection {
   _broadcast(msg) {
     const buf = Buffer.from(msg, "utf8");
     const s   = dgram.createSocket("udp4");
-    s.send(buf, 0, buf.length, ELECT_PORT, MCAST_ADDR, () => s.close());
+    s.bind(0, () => {
+      try { s.setMulticastInterface(this.myIP); } catch (e) {}
+      s.setMulticastTTL(4);
+      s.send(buf, 0, buf.length, ELECT_PORT, MCAST_ADDR, () => s.close());
+    });
     console.log(`[election] → ${msg}`);
   }
 

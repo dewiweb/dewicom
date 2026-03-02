@@ -50,6 +50,24 @@
     button:hover { opacity: 0.85; }
     button:disabled { opacity: 0.4; cursor: not-allowed; }
     #status { font-size: 13px; color: #888; min-height: 18px; }
+    .settings-btn {
+      position: fixed;
+      bottom: 16px;
+      right: 16px;
+      background: transparent;
+      border: 1px solid #333;
+      border-radius: 6px;
+      color: #555;
+      font-size: 18px;
+      width: 34px;
+      height: 34px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    .settings-btn:hover { color: #aaa; border-color: #555; }
   </style>
 </head>
 <body>
@@ -66,6 +84,7 @@
 
   <button id="retryBtn" onclick="retry()">🔍 Rechercher à nouveau</button>
   <div id="status"></div>
+  <button class="settings-btn" title="Paramètres réseau" onclick="openSettings()">⚙️</button>
 
   <script>
     async function retry() {
@@ -93,6 +112,9 @@
         btn.disabled = false;
         btn.textContent = "🔍 Rechercher à nouveau";
       }
+    }
+    function openSettings() {
+      if (window.DewiComDesktop) window.DewiComDesktop.openSettings();
     }
   </script>
 </body>

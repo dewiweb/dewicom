@@ -53,6 +53,15 @@ document.getElementById("qrPanel").addEventListener("click", (e) => {
     document.getElementById("qrPanel").classList.add("hidden");
 });
 
+// Bouton paramètres réseau — visible uniquement sous Electron
+function openNetworkSettings() {
+  if (window.DewiComDesktop) window.DewiComDesktop.openSettings();
+}
+if (window.DewiComDesktop && typeof window.DewiComDesktop.openSettings === "function") {
+  const btn = document.getElementById("networkSettingsBtn");
+  if (btn) btn.style.display = "flex";
+}
+
 // Auto-rejoin si credentials sauvegardés
 window.addEventListener("load", () => {
   if (savedName && savedChannel) {

@@ -24,10 +24,24 @@ const SCAN_TIMEOUT_HTTPS_MS = 1200;
 const DEWICOM_PORT = 3001;
 
 let mainWindow = null;
+let settingsWindow = null;
 let tray = null;
 let discoveredServer = null;
 let announceSocket = null;
 let announceTimer = null;
+
+// ── Liste des interfaces réseau disponibles ──────────────────────────────────
+function listNetworkInterfaces() {
+  const result = [];
+  for (const [name, ifaces] of Object.entries(os.networkInterfaces())) {
+    for (const iface of ifaces) {
+      if (iface.family !== "IPv4" || iface.internal) continue;
+      if (iface.address.startsWith("169.254.")) continue;
+      result.push({ name, address: iface.address });
+    }
+  }
+  return result;
+}
 
 // ── Création de la fenêtre principale ────────────────────────────────────────
 function createWindow() {
@@ -77,9 +91,12 @@ function listenMulticast(ignoreIP = null) {
 
     socket.on("error", () => { clearTimeout(timer); socket.close(); resolve(null); });
 
-    socket.bind(MCAST_PORT, () => {
+    socket.bind(MCAST_PORT, "0.0.0.0", () => {
       try {
-        socket.addMembership(MCAST_ADDR);
+        const localIP = getLocalIP();
+        try { socket.addMembership(MCAST_ADDR, localIP); } catch (e) {
+          socket.addMembership(MCAST_ADDR);
+        }
         console.log(`[multicast] Écoute ${MCAST_ADDR}:${MCAST_PORT} pendant ${LISTEN_TIMEOUT_MS}ms...`);
       } catch (e) {
         console.warn("[multicast] Impossible de rejoindre le groupe:", e.message);
@@ -93,15 +110,29 @@ function listenMulticast(ignoreIP = null) {
 
 // ── Scan HTTP parallèle (fallback) ───────────────────────────────────────────
 function getLocalSubnet() {
-  for (const ifaces of Object.values(os.networkInterfaces())) {
+  const candidates = [];
+  for (const [name, ifaces] of Object.entries(os.networkInterfaces())) {
     for (const iface of ifaces) {
-      if (iface.family === "IPv4" && !iface.internal) {
-        const parts = iface.address.split(".");
-        return { subnet: parts.slice(0, 3).join("."), lastOctet: parseInt(parts[3]), ownIP: iface.address };
-      }
+      if (iface.family !== "IPv4" || iface.internal) continue;
+      if (iface.address.startsWith("169.254.")) continue; // APIPA
+      const lname = name.toLowerCase();
+      let score = 0;
+      if (lname.includes("virtualbox") || lname.includes("vmware") ||
+          lname.includes("vbox") || lname.includes("hyper-v") ||
+          lname.includes("loopback") || lname.includes("tap") ||
+          lname.includes("tun") || lname.includes("docker") ||
+          lname.startsWith("virbr") || lname.startsWith("veth") ||
+          lname.startsWith("br-") || lname.startsWith("lxc") ||
+          lname.startsWith("lxd")) score -= 10;
+      if (iface.address.startsWith("192.168.") || iface.address.startsWith("10.") ||
+          iface.address.startsWith("172.")) score += 5;
+      candidates.push({ address: iface.address, score });
     }
   }
-  return { subnet: "192.168.1", lastOctet: 1, ownIP: "127.0.0.1" };
+  if (candidates.length === 0) return { subnet: "192.168.1", lastOctet: 1, ownIP: "127.0.0.1" };
+  candidates.sort((a, b) => b.score - a.score);
+  const parts = candidates[0].address.split(".");
+  return { subnet: parts.slice(0, 3).join("."), lastOctet: parseInt(parts[3]), ownIP: candidates[0].address };
 }
 
 function checkServer(ip, port) {
@@ -262,6 +293,53 @@ ipcMain.handle("rediscover", async () => {
     setTimeout(() => mainWindow.loadURL(`${protocol}://${ip}:${port}`), 500);
   }
   return discoveredServer;
+});
+
+ipcMain.handle("get-network-interfaces", () => listNetworkInterfaces());
+
+ipcMain.handle("get-selected-interface", () => {
+  const fs = require("fs");
+  const configPath = path.join(app.getPath("userData"), "server-config.json");
+  try {
+    const saved = JSON.parse(fs.readFileSync(configPath, "utf8"));
+    return saved.forcedInterface || null;
+  } catch (e) { return null; }
+});
+
+ipcMain.handle("set-network-interface", (_, ip) => {
+  const fs = require("fs");
+  const configPath = path.join(app.getPath("userData"), "server-config.json");
+  let config = {};
+  try { config = JSON.parse(fs.readFileSync(configPath, "utf8")); } catch (e) {}
+  if (ip) config.forcedInterface = ip;
+  else delete config.forcedInterface;
+  fs.writeFileSync(configPath, JSON.stringify(config), "utf8");
+  console.log(`[settings] Interface forcée: ${ip || "auto"}`);
+  return true;
+});
+
+ipcMain.handle("open-settings", () => {
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.focus();
+    return;
+  }
+  settingsWindow = new BrowserWindow({
+    width: 460,
+    height: 420,
+    title: "DewiCom — Paramètres réseau",
+    backgroundColor: "#1a1a2e",
+    parent: mainWindow,
+    modal: false,
+    resizable: false,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, "preload.js"),
+    },
+    icon: path.join(__dirname, "assets", "icon.png"),
+  });
+  settingsWindow.loadFile(path.join(__dirname, "settings.html"));
+  settingsWindow.on("closed", () => { settingsWindow = null; });
 });
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────

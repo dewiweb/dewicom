@@ -7,9 +7,9 @@
 
 const http = require("http");
 const path = require("path");
-const os = require("os");
+const os   = require("os");
 const dgram = require("dgram");
-const fs = require("fs");
+const fs   = require("fs");
 
 const { version: APP_VERSION } = require("./package.json");
 
@@ -36,13 +36,40 @@ let io = null;
 let announceSocket = null;
 let announceTimer = null;
 
+function getForcedInterface() {
+  try {
+    const { app } = require("electron");
+    const configPath = path.join(app.getPath("userData"), "server-config.json");
+    const saved = JSON.parse(fs.readFileSync(configPath, "utf8"));
+    return saved.forcedInterface || null;
+  } catch (e) { return null; }
+}
+
 function getLocalIP() {
-  for (const ifaces of Object.values(os.networkInterfaces())) {
+  const forced = getForcedInterface();
+  if (forced) return forced;
+  const candidates = [];
+  for (const [name, ifaces] of Object.entries(os.networkInterfaces())) {
     for (const iface of ifaces) {
-      if (iface.family === "IPv4" && !iface.internal) return iface.address;
+      if (iface.family !== "IPv4" || iface.internal) continue;
+      if (iface.address.startsWith("169.254.")) continue; // APIPA — pas de routeur
+      const lname = name.toLowerCase();
+      let score = 0;
+      if (lname.includes("virtualbox") || lname.includes("vmware") ||
+          lname.includes("vbox") || lname.includes("hyper-v") ||
+          lname.includes("loopback") || lname.includes("tap") ||
+          lname.includes("tun") || lname.includes("docker") ||
+          lname.startsWith("virbr") || lname.startsWith("veth") ||
+          lname.startsWith("br-") || lname.startsWith("lxc") ||
+          lname.startsWith("lxd")) score -= 10;
+      if (iface.address.startsWith("192.168.") || iface.address.startsWith("10.") ||
+          iface.address.startsWith("172.")) score += 5;
+      candidates.push({ address: iface.address, score });
     }
   }
-  return "127.0.0.1";
+  if (candidates.length === 0) return "127.0.0.1";
+  candidates.sort((a, b) => b.score - a.score);
+  return candidates[0].address;
 }
 
 function startAnnouncing(ip, port) {

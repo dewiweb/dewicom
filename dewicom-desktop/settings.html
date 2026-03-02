@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>DewiCom — Paramètres réseau</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #1a1a2e;
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      display: flex;
+      flex-direction: column;
+      padding: 28px 24px;
+      gap: 20px;
+      height: 100vh;
+    }
+    h1 { font-size: 18px; font-weight: 700; color: #e94560; display: flex; align-items: center; gap: 8px; }
+    .section {
+      background: #16213e;
+      border: 1px solid #0f3460;
+      border-radius: 10px;
+      padding: 18px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    label { font-size: 13px; color: #aaa; }
+    select {
+      background: #0f3460;
+      color: #fff;
+      border: 1px solid #1a4a80;
+      border-radius: 6px;
+      padding: 9px 12px;
+      font-size: 14px;
+      width: 100%;
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23aaa' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      padding-right: 32px;
+    }
+    select:focus { outline: 2px solid #e94560; border-color: #e94560; }
+    .iface-detail {
+      font-size: 12px;
+      color: #666;
+      font-style: italic;
+      min-height: 16px;
+    }
+    .hint {
+      font-size: 12px;
+      color: #666;
+      line-height: 1.7;
+      border-top: 1px solid #0f3460;
+      padding-top: 10px;
+    }
+    .hint strong { color: #aaa; }
+    .actions {
+      display: flex;
+      gap: 10px;
+      margin-top: auto;
+    }
+    button {
+      flex: 1;
+      padding: 11px 0;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    button:hover { opacity: 0.85; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    #saveBtn { background: #e94560; color: #fff; }
+    #cancelBtn { background: #16213e; color: #aaa; border: 1px solid #0f3460; }
+    #status { font-size: 13px; color: #888; text-align: center; min-height: 18px; }
+    .badge-auto {
+      display: inline-block;
+      background: #22c55e22;
+      color: #22c55e;
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 20px;
+      margin-left: 4px;
+    }
+  </style>
+</head>
+<body>
+  <h1>⚙️ Paramètres réseau</h1>
+
+  <div class="section">
+    <label>Interface réseau utilisée pour la découverte DewiCom</label>
+    <select id="ifaceSelect">
+      <option value="">Automatique (recommandé)</option>
+    </select>
+    <div class="iface-detail" id="ifaceDetail"></div>
+    <div class="hint">
+      <strong>Automatique</strong> : DewiCom choisit l'interface avec la meilleure priorité
+      (exclut les adresses APIPA 169.254.x.x et les interfaces VirtualBox/VMware).<br><br>
+      <strong>Manuel</strong> : à utiliser si l'app choisit la mauvaise interface sur les machines
+      avec plusieurs cartes réseau.
+    </div>
+  </div>
+
+  <div id="status"></div>
+
+  <div class="actions">
+    <button id="cancelBtn" onclick="window.close()">Annuler</button>
+    <button id="saveBtn" onclick="save()">Enregistrer et relancer</button>
+  </div>
+
+  <script>
+    const sel = document.getElementById("ifaceSelect");
+    const detail = document.getElementById("ifaceDetail");
+    const status = document.getElementById("status");
+
+    async function init() {
+      if (!window.DewiComDesktop) {
+        status.textContent = "Erreur: API non disponible";
+        return;
+      }
+
+      const [ifaces, current] = await Promise.all([
+        window.DewiComDesktop.getNetworkInterfaces(),
+        window.DewiComDesktop.getSelectedInterface(),
+      ]);
+
+      for (const iface of ifaces) {
+        const opt = document.createElement("option");
+        opt.value = iface.address;
+        opt.textContent = `${iface.address}  —  ${iface.name}`;
+        sel.appendChild(opt);
+      }
+
+      sel.value = current || "";
+      updateDetail();
+    }
+
+    function updateDetail() {
+      const val = sel.value;
+      if (!val) {
+        detail.textContent = "L'interface sera choisie automatiquement au démarrage.";
+      } else {
+        detail.textContent = `Toutes les communications réseau passeront par ${val}.`;
+      }
+    }
+
+    sel.addEventListener("change", updateDetail);
+
+    async function save() {
+      const btn = document.getElementById("saveBtn");
+      btn.disabled = true;
+      status.textContent = "Enregistrement...";
+
+      const val = sel.value || null;
+      await window.DewiComDesktop.setNetworkInterface(val);
+
+      status.textContent = val
+        ? `Interface fixée sur ${val}. Relancement en cours...`
+        : "Mode automatique activé. Relancement en cours...";
+
+      setTimeout(async () => {
+        window.close();
+        await window.DewiComDesktop.rediscover();
+      }, 800);
+    }
+
+    init();
+  </script>
+</body>
+</html>

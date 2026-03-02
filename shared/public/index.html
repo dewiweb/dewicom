@@ -82,6 +82,16 @@
     }
     .btn-join:active { transform: scale(.98); }
     .btn-join:disabled { background: var(--surface3); color: var(--muted); cursor: default; box-shadow: none; }
+    .btn-network-settings {
+      display: none;
+      align-items: center; gap: 6px;
+      background: transparent; border: 1px solid var(--border);
+      border-radius: 8px; padding: 7px 12px;
+      color: var(--muted); font-size: .72rem; font-weight: 600;
+      cursor: pointer; transition: color .15s, border-color .15s;
+      width: 100%;
+    }
+    .btn-network-settings:hover { color: var(--text2); border-color: var(--border2); }
 
     /* ══════════════════════════════════
        MAIN SCREEN
@@ -452,6 +462,10 @@
     </div>
 
     <button class="btn-join" id="joinBtn" disabled>Rejoindre la session →</button>
+
+    <button class="btn-network-settings" id="networkSettingsBtn" onclick="openNetworkSettings()">
+      ⚙️ <span>Paramètres réseau…</span>
+    </button>
   </div>
 </div>
 

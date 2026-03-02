@@ -1,6 +1,6 @@
 {
   "name": "dewicom-desktop",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "DewiCom Desktop - Application PTT cross-platform",
   "author": {
     "name": "dewiweb",
@@ -51,6 +51,10 @@
       "target": [
         "nsis"
       ]
+    },
+    "nsis": {
+      "include": "build/installer.nsh",
+      "perMachine": true
     }
   },
   "devDependencies": {

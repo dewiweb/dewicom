@@ -5,6 +5,20 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 
 ---
 
+## [1.1.1] — 2026-03-02
+
+### Ajouté
+- **Paramètres réseau** : fenêtre de sélection manuelle de l'interface réseau (`settings.html`), accessible depuis le formulaire de départ (bouton ⚙️ visible uniquement sous Electron)
+- Règles pare-feu Windows créées automatiquement à l'installation (NSIS) : UDP 9998, UDP 9999, TCP 3001
+- Script PowerShell `scripts/open-firewall-windows.ps1` pour ouvrir les ports manuellement sans réinstaller
+
+### Corrigé
+- **Windows multi-interfaces** : `getLocalIP()` exclut désormais les adresses APIPA (`169.254.x.x`) et déprioritise les interfaces virtuelles (VirtualBox, VMware, Hyper-V, Docker, TAP/TUN) — résolvait le problème de découverte réseau sur machines avec de nombreuses interfaces
+- **Multicast UDP** : bind explicite sur `0.0.0.0` et `addMembership` avec l'IP locale pour cibler la bonne interface sur Windows
+- **Linux** : scoring des interfaces virtuelles étendu à `virbr`, `veth`, `br-`, `lxc`, `lxd`
+
+---
+
 ## [1.1.0] — 2026-03-01
 
 ### Ajouté
