@@ -47,9 +47,19 @@ public class LocalWebServer {
     private DatagramSocket announceSocket;
     private boolean running = false;
 
+    // Données utilisateur par socket
+    static class UserInfo {
+        String name, channel, clientId;
+        Set<String> listenChannels = new HashSet<>();
+        Set<String> talkChannels   = new HashSet<>();
+        UserInfo(String name, String channel, String clientId) {
+            this.name = name; this.channel = channel; this.clientId = clientId;
+        }
+    }
+
     // État partagé
     final Map<String, Set<WebSocket>> channelSockets = new HashMap<>();
-    final Map<WebSocket, String[]> socketUser = new HashMap<>();
+    final Map<WebSocket, UserInfo> socketUser = new HashMap<>();
 
     public LocalWebServer(Context context) {
         this.context = context;
@@ -192,13 +202,12 @@ public class LocalWebServer {
         @Override
         public void onClose(WebSocket ws, int code, String reason, boolean remote) {
             synchronized (LocalWebServer.this) {
-                String[] user = socketUser.remove(ws);
+                UserInfo user = socketUser.remove(ws);
                 if (user != null) {
-                    Set<WebSocket> ch = channelSockets.get(user[1]);
-                    if (ch != null) ch.remove(ws);
-                    broadcastChannel(user[1], "42[\"user-left\",{\"name\":\"" + user[0] + "\",\"channel\":\"" + user[1] + "\"}]", ws);
+                    for (Set<WebSocket> s : channelSockets.values()) s.remove(ws);
+                    broadcastChannel(user.channel, "42[\"user-left\",{\"name\":\"" + user.name + "\",\"channel\":\"" + user.channel + "\"}]", ws);
                     broadcastChannelState();
-                    Log.d(TAG, user[0] + " déconnecté");
+                    Log.d(TAG, user.name + " déconnecté");
                 }
             }
         }
@@ -225,35 +234,42 @@ public class LocalWebServer {
                         String clientId = extractJson(payload, "clientId");
                         if (name == null || channel == null) return;
                         synchronized (LocalWebServer.this) {
-                            // Nettoie toute entrée existante avec le même clientId ou nom (reconnexion)
-                            java.util.Iterator<Map.Entry<WebSocket, String[]>> it = socketUser.entrySet().iterator();
+                            // Nettoie toute entrée existante avec le même clientId (reconnexion)
+                            java.util.Iterator<Map.Entry<WebSocket, UserInfo>> it = socketUser.entrySet().iterator();
                             while (it.hasNext()) {
-                                Map.Entry<WebSocket, String[]> entry = it.next();
+                                Map.Entry<WebSocket, UserInfo> entry = it.next();
                                 if (entry.getKey() == ws) continue;
-                                String[] u = entry.getValue();
-                                boolean sameClient = (clientId != null && clientId.equals(u.length > 2 ? u[2] : null))
-                                        || (clientId == null && name.equals(u[0]));
+                                UserInfo u = entry.getValue();
+                                boolean sameClient = (clientId != null && clientId.equals(u.clientId))
+                                        || (clientId == null && name.equals(u.name));
                                 if (sameClient) {
                                     for (Set<WebSocket> s : channelSockets.values()) s.remove(entry.getKey());
                                     it.remove();
                                 }
                             }
-                            // Retire des anciens canaux du ws courant
-                            String[] old = socketUser.get(ws);
-                            if (old != null) {
-                                for (Set<WebSocket> s : channelSockets.values()) s.remove(ws);
-                            }
-                            socketUser.put(ws, new String[]{name, channel, clientId != null ? clientId : ""});
-                            channelSockets.computeIfAbsent(channel, k -> new HashSet<>()).add(ws);
-                            // Ajoute aussi dans les listenChannels (mode director)
+                            for (Set<WebSocket> s : channelSockets.values()) s.remove(ws);
+                            UserInfo info = new UserInfo(name, channel, clientId != null ? clientId : "");
+                            // listenChannels depuis le payload
                             String listenRaw = extractJsonArray(payload, "listenChannels");
                             if (listenRaw != null) {
                                 for (String lch : listenRaw.split(",")) {
                                     lch = lch.trim().replace("\"", "").replace("[", "").replace("]", "");
-                                    if (!lch.isEmpty() && !lch.equals(channel)) {
-                                        channelSockets.computeIfAbsent(lch, k -> new HashSet<>()).add(ws);
-                                    }
+                                    if (!lch.isEmpty()) info.listenChannels.add(lch);
                                 }
+                            }
+                            // talkChannels depuis le payload
+                            String talkRaw = extractJsonArray(payload, "talkChannels");
+                            if (talkRaw != null) {
+                                for (String tch : talkRaw.split(",")) {
+                                    tch = tch.trim().replace("\"", "").replace("[", "").replace("]", "");
+                                    if (!tch.isEmpty()) info.talkChannels.add(tch);
+                                }
+                            }
+                            socketUser.put(ws, info);
+                            channelSockets.computeIfAbsent(channel, k -> new HashSet<>()).add(ws);
+                            for (String lch : info.listenChannels) {
+                                if (!lch.equals(channel))
+                                    channelSockets.computeIfAbsent(lch, k -> new HashSet<>()).add(ws);
                             }
                         }
                         ws.send("42[\"channels-init\"," + buildChannelsJson() + "]");
@@ -265,41 +281,96 @@ public class LocalWebServer {
                     case "switch-channel": {
                         String newCh = extractJson(payload, "channel");
                         if (newCh == null) return;
-                        String[] user = socketUser.get(ws);
+                        UserInfo user = socketUser.get(ws);
                         if (user == null) return;
                         synchronized (LocalWebServer.this) {
-                            Set<WebSocket> old = channelSockets.get(user[1]);
+                            Set<WebSocket> old = channelSockets.get(user.channel);
                             if (old != null) old.remove(ws);
-                            broadcastChannel(user[1], "42[\"user-left\",{\"name\":\"" + user[0] + "\",\"channel\":\"" + user[1] + "\"}]", ws);
-                            user[1] = newCh;
+                            broadcastChannel(user.channel, "42[\"user-left\",{\"name\":\"" + user.name + "\",\"channel\":\"" + user.channel + "\"}]", ws);
+                            user.channel = newCh;
                             channelSockets.computeIfAbsent(newCh, k -> new HashSet<>()).add(ws);
                         }
-                        broadcastChannel(newCh, "42[\"user-joined\",{\"name\":\"" + user[0] + "\",\"channel\":\"" + newCh + "\"}]", ws);
+                        broadcastChannel(newCh, "42[\"user-joined\",{\"name\":\"" + user.name + "\",\"channel\":\"" + newCh + "\"}]", ws);
                         broadcastChannelState();
                         break;
                     }
-                    case "ptt-start": {
-                        String[] user = socketUser.get(ws);
+                    case "update-listen-channels": {
+                        UserInfo user = socketUser.get(ws);
                         if (user == null) return;
-                        broadcastChannel(user[1], "42[\"ptt-state\",{\"from\":\"" + user[0] + "\",\"fromId\":\"" + ws.hashCode() + "\",\"channel\":\"" + user[1] + "\",\"speaking\":true}]", ws);
+                        Set<String> newListen = new HashSet<>();
+                        String listenRaw = extractJsonArray(payload, "listenChannels");
+                        if (listenRaw != null) {
+                            for (String lch : listenRaw.split(",")) {
+                                lch = lch.trim().replace("\"", "").replace("[", "").replace("]", "");
+                                if (!lch.isEmpty()) newListen.add(lch);
+                            }
+                        }
+                        synchronized (LocalWebServer.this) {
+                            for (String old : user.listenChannels) {
+                                if (!newListen.contains(old) && !old.equals(user.channel) && !user.talkChannels.contains(old))
+                                    channelSockets.getOrDefault(old, new HashSet<>()).remove(ws);
+                            }
+                            for (String lch : newListen) {
+                                if (!user.listenChannels.contains(lch) && !lch.equals(user.channel))
+                                    channelSockets.computeIfAbsent(lch, k -> new HashSet<>()).add(ws);
+                            }
+                            user.listenChannels = newListen;
+                        }
+                        break;
+                    }
+                    case "update-talk-channels": {
+                        UserInfo user = socketUser.get(ws);
+                        if (user == null) return;
+                        Set<String> newTalk = new HashSet<>();
+                        String talkRaw = extractJsonArray(payload, "talkChannels");
+                        if (talkRaw != null) {
+                            for (String tch : talkRaw.split(",")) {
+                                tch = tch.trim().replace("\"", "").replace("[", "").replace("]", "");
+                                if (!tch.isEmpty()) newTalk.add(tch);
+                            }
+                        }
+                        synchronized (LocalWebServer.this) { user.talkChannels = newTalk; }
+                        break;
+                    }
+                    case "ptt-start": {
+                        UserInfo user = socketUser.get(ws);
+                        if (user == null) return;
+                        Set<String> talkChs = user.talkChannels.isEmpty() ? new HashSet<>(java.util.Collections.singleton(user.channel)) : user.talkChannels;
+                        for (String tch : talkChs)
+                            broadcastChannel(tch, "42[\"ptt-state\",{\"from\":\"" + user.name + "\",\"fromId\":\"" + ws.hashCode() + "\",\"channel\":\"" + tch + "\",\"speaking\":true}]", ws);
                         break;
                     }
                     case "ptt-stop": {
-                        String[] user = socketUser.get(ws);
+                        UserInfo user = socketUser.get(ws);
                         if (user == null) return;
-                        broadcastChannel(user[1], "42[\"ptt-state\",{\"from\":\"" + user[0] + "\",\"fromId\":\"" + ws.hashCode() + "\",\"channel\":\"" + user[1] + "\",\"speaking\":false}]", ws);
+                        Set<String> talkChs = user.talkChannels.isEmpty() ? new HashSet<>(java.util.Collections.singleton(user.channel)) : user.talkChannels;
+                        for (String tch : talkChs)
+                            broadcastChannel(tch, "42[\"ptt-state\",{\"from\":\"" + user.name + "\",\"fromId\":\"" + ws.hashCode() + "\",\"channel\":\"" + tch + "\",\"speaking\":false}]", ws);
                         break;
                     }
                     case "audio-chunk": {
-                        String[] user = socketUser.get(ws);
+                        UserInfo user = socketUser.get(ws);
                         if (user == null) return;
-                        broadcastChannel(user[1], text, ws);
+                        // Director mode : broadcast sur tous les talkChannels
+                        Set<String> talkChs = user.talkChannels.isEmpty() ? new HashSet<>(java.util.Collections.singleton(user.channel)) : user.talkChannels;
+                        for (String tch : talkChs) broadcastChannel(tch, text, ws);
                         break;
                     }
                     case "call-ring": {
-                        String[] user = socketUser.get(ws);
+                        UserInfo user = socketUser.get(ws);
                         if (user == null) return;
-                        broadcastChannel(user[1], "42[\"call-ring\",{\"from\":\"" + user[0] + "\",\"channel\":\"" + user[1] + "\"}]", ws);
+                        String ringCh = extractJson(payload, "channel");
+                        if (ringCh == null) ringCh = user.channel;
+                        // Notifie les membres du canal + ceux qui l'écoutent (director mode)
+                        Set<WebSocket> targets = new HashSet<>();
+                        for (Map.Entry<WebSocket, UserInfo> e : socketUser.entrySet()) {
+                            if (e.getKey() == ws) continue;
+                            UserInfo u = e.getValue();
+                            if (u.channel.equals(ringCh) || u.listenChannels.contains(ringCh))
+                                targets.add(e.getKey());
+                        }
+                        String ringMsg = "42[\"call-ring\",{\"from\":\"" + user.name + "\",\"channel\":\"" + ringCh + "\"}]";
+                        for (WebSocket t : targets) { if (t.isOpen()) t.send(ringMsg); }
                         break;
                     }
                 }
@@ -310,9 +381,10 @@ public class LocalWebServer {
 
         @Override
         public void onMessage(WebSocket ws, java.nio.ByteBuffer buf) {
-            String[] user = socketUser.get(ws);
+            UserInfo user = socketUser.get(ws);
             if (user == null) return;
-            broadcastChannelBinary(user[1], buf, ws);
+            Set<String> talkChs = user.talkChannels.isEmpty() ? new HashSet<>(java.util.Collections.singleton(user.channel)) : user.talkChannels;
+            for (String tch : talkChs) broadcastChannelBinary(tch, buf, ws);
         }
 
         @Override
@@ -387,22 +459,19 @@ public class LocalWebServer {
     private synchronized void broadcastChannelState() {
         // Format attendu par le JS : { channelId: { users: [{id, name}], name, color } }
         String[][] defs = {{"general","Général","#6b7280"},{"foh","FOH Son","#3b82f6"},{"plateau","Plateau","#f97316"},{"lumiere","Lumière","#a855f7"},{"regie","Régie","#22c55e"}};
-        StringBuilder sb = new StringBuilder("{" );
+        StringBuilder sb = new StringBuilder("{");
         for (int i = 0; i < defs.length; i++) {
             String chId = defs[i][0];
             if (i > 0) sb.append(",");
             sb.append("\"").append(chId).append("\":{\"name\":\"").append(defs[i][1]).append("\",\"color\":\"").append(defs[i][2]).append("\",\"users\":");
-            Set<WebSocket> sockets = channelSockets.get(chId);
             sb.append("[");
-            if (sockets != null) {
-                boolean first = true;
-                for (WebSocket ws : sockets) {
-                    String[] u = socketUser.get(ws);
-                    if (u != null && u[1].equals(chId)) {
-                        if (!first) sb.append(",");
-                        sb.append("{\"id\":\"").append(ws.hashCode()).append("\",\"name\":\"").append(u[0].replace("\"", "")).append("\"}");
-                        first = false;
-                    }
+            boolean first = true;
+            // N'affiche que les membres dont c'est le canal principal
+            for (Map.Entry<WebSocket, UserInfo> e : socketUser.entrySet()) {
+                if (e.getValue().channel.equals(chId)) {
+                    if (!first) sb.append(",");
+                    sb.append("{\"id\":\"").append(e.getKey().hashCode()).append("\",\"name\":\"").append(e.getValue().name.replace("\"", "")).append("\"}");
+                    first = false;
                 }
             }
             sb.append("]}");

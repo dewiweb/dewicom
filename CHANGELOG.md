@@ -5,6 +5,14 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 
 ---
 
+## [1.1.17] — 2026-03-02
+
+### Ajouté
+- **LocalWebServer.java** : implémentation complète du director mode — `update-listen-channels`, `update-talk-channels`, audio/PTT sur `talkChannels`, `call-ring` aux listeners du canal
+- **LocalWebServer.java** : classe interne `UserInfo` remplace `String[]` pour stocker `listenChannels` et `talkChannels` par socket
+
+---
+
 ## [1.1.16] — 2026-03-02
 
 ### Corrigé
