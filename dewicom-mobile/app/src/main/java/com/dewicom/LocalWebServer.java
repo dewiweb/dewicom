@@ -143,7 +143,7 @@ public class LocalWebServer {
             Log.d(TAG, "HTTP: " + uri);
 
             if (uri.equals("/api/dewicom-discovery") || uri.equals("/api/ping")) {
-                String json = "{\"service\":\"DewiCom\",\"version\":\"1.0.0\",\"status\":\"running\",\"mode\":\"apk\"}";
+                String json = "{\"service\":\"DewiCom\",\"version\":\"" + com.dewicom.BuildConfig.VERSION_NAME + "\",\"status\":\"running\",\"mode\":\"apk\"}";
                 Response r = newFixedLengthResponse(Response.Status.OK, "application/json", json);
                 r.addHeader("Access-Control-Allow-Origin", "*");
                 return r;

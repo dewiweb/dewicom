@@ -5,6 +5,31 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 
 ---
 
+## [1.2.0] — 2026-03-02
+
+### Nouvelles fonctionnalités
+- **Director mode complet** : écoute et émission simultanée sur plusieurs canaux, sélection granulaire par canal (écoute / parole indépendantes)
+- **`audio-chunk` multi-canal** : un seul paquet émis avec `talkChannels`, serveur distribue aux destinataires uniques — fin des sons découpés/délayés
+- **`call-ring` multi-canal** : la sonnerie suit les canaux d'émission director (tous les `talkChannels` actifs)
+- **Version dans le footer** : `v1.2.0` affiché dans le footer leader (lu dynamiquement depuis `dewicom-discovery`)
+
+### Corrigé
+- **Élection leader (Bully)** : un nœud se soumettait à un `LEADER` d'ID inférieur — désormais challenge et relance l'élection (`LeaderElection.java` + `leader-election.js`)
+- **Desktop vs APK** : le desktop (nodeId = IP + 2³²) prend correctement le leadership face à un APK déjà leader
+- **`channel-state` badges** : compteurs de participants jamais mis à jour — `broadcastChannelState()` ajouté après `join`/`switch-channel`/`disconnect`
+- **`call-ring`** : diffusait sur tous les canaux (`broadcastAllExcept`) au lieu du canal de l'appelant
+- **`user-left`** : notifiait tous les canaux au lieu du seul canal de l'utilisateur
+- **Protocole Socket.io** : `"42[...]"` confondu avec heartbeat `"2"` dans `LocalWebServer.java` — `join` et autres événements ignorés
+- **Navigateur externe → APK** : utilisait WS natif vers `127.0.0.1` au lieu de l'IP LAN réelle
+- **`BuildConfig.VERSION_NAME`** : version APK servie dynamiquement dans `/api/dewicom-discovery` (plus de hardcode `1.0.0`)
+
+### Amélioré
+- **`LocalWebServer.java`** : `UserInfo` remplace `String[]` pour stocker `listenChannels`, `talkChannels`, `name`, `channel`
+- **Déduplication audio** : `Set seen` côté serveur empêche envoi multiple du même chunk au même destinataire
+- **`local-server.js`** : `payload.talkChannels` prioritaire sur `user.talkChannels` pour compatibilité ascendante
+
+---
+
 ## [1.1.21] — 2026-03-02
 
 ### Corrigé

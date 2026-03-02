@@ -24,7 +24,8 @@ function updateLeaderFooter(ip, mode) {
   else if (mode === "local") serverType = "Android local";
   else if (mode === "nodejs") serverType = "Serveur Node.js";
   else if (mode === "desktop-local") serverType = "Desktop local";
-  _leaderBaseText = `${serverType} — ${ip}:3001`;
+  const ver = window.dewicomServerVersion ? ` · v${window.dewicomServerVersion}` : "";
+  _leaderBaseText = `${serverType} — ${ip}:3001${ver}`;
   _leaderDotClass = "leader-dot " + (isLocal ? "local" : (mode === "apk" ? "apk" : "remote"));
   updateLeaderUserCount();
 }
@@ -228,6 +229,7 @@ async function startSession() {
       const res = await fetch(`http://${serverIP}:3001/api/dewicom-discovery`, { signal: AbortSignal.timeout(1500) });
       const data = await res.json();
       window.dewicomServerMode = data.mode || "apk";
+      if (data.version) window.dewicomServerVersion = data.version;
     } catch { window.dewicomServerMode = "apk"; }
   }
   const serverMode = window.dewicomServerMode;

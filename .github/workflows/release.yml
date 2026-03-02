@@ -153,27 +153,53 @@ jobs:
         with:
           path: artifacts/
 
+      - name: Extract release notes from CHANGELOG
+        id: notes
+        run: |
+          TAG="${{ github.ref_name }}"
+          VERSION="${TAG#v}"
+
+          # Extrait le bloc du CHANGELOG pour ce tag
+          SECTION=$(awk "/^## \[${VERSION}\]/,/^---$/" CHANGELOG.md | head -n -1)
+
+          if [ -z "$SECTION" ]; then
+            SECTION="Voir [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/master/CHANGELOG.md) pour le détail des changements."
+          fi
+
+          # Détermine la dernière version x.x.0 précédente pour le résumé
+          MAJOR_MINOR=$(echo "$VERSION" | cut -d. -f1-2)
+          PREV_MAJOR_MINOR=$(awk '/^## \[/ {
+            match($0, /\[([0-9]+)\.([0-9]+)\.0\]/, arr)
+            if (arr[0] != "" && $0 !~ /\['"${VERSION}"'\]/) { print arr[1]"."arr[2]".0"; exit }
+          }' CHANGELOG.md)
+
+          if [ -n "$PREV_MAJOR_MINOR" ] && [ "$VERSION" != "${MAJOR_MINOR}.0" ]; then
+            SINCE_SECTION=$(awk "/^## \[${MAJOR_MINOR}\\.0\]/,/^## \[${PREV_MAJOR_MINOR}\]/" CHANGELOG.md \
+              | grep -v "^## \[${PREV_MAJOR_MINOR}\]" | head -n -1)
+            SUMMARY="## Changements depuis v${MAJOR_MINOR}.0"$'\n'"${SINCE_SECTION}"$'\n\n---'$'\n\n'
+          else
+            SUMMARY=""
+          fi
+
+          BODY="${SUMMARY}${SECTION}"$'\n\n'"---"$'\n'"## Installation"$'\n'
+          BODY+=$'\n''| Plateforme | Fichier | Notes |'
+          BODY+=$'\n''|---|---|---|'
+          BODY+=$'\n''| 🐧 Linux | `DewiCom-*.AppImage` | `chmod +x` puis lancer |'
+          BODY+=$'\n''| 🪟 Windows | `DewiCom-Setup-*.exe` | Installeur NSIS |'
+          BODY+=$'\n''| 🤖 Android | `DewiCom-*.apk` | Activer "sources inconnues" |'
+          BODY+=$'\n\n''> **Réseau** : LAN local (WiFi/Ethernet) · Ports UDP 9998-9999 (multicast) · TCP 3001'
+
+          # Écrit dans un fichier pour éviter les problèmes de quotes dans les variables
+          echo "$BODY" > release_notes.md
+          echo "notes_file=release_notes.md" >> $GITHUB_OUTPUT
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: DewiCom ${{ github.ref_name }}
           draft: false
           prerelease: ${{ contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
-          body: |
-            ## DewiCom ${{ github.ref_name }}
-
-            ### Installation
-
-            | Plateforme | Fichier | Notes |
-            |---|---|---|
-            | Linux | `DewiCom-*.AppImage` | `chmod +x` puis lancer |
-            | Windows | `DewiCom-Setup-*.exe` | Installeur NSIS |
-            | Android | `app-release.apk` | Activer "sources inconnues" |
-
-            ### Réseau requis
-            - LAN local (WiFi ou Ethernet)
-            - Ports UDP 9998/9999 ouverts (multicast)
-            - Port TCP 3001 accessible entre appareils
+          body_path: release_notes.md
           files: |
             artifacts/electron-linux/*.AppImage
             artifacts/electron-windows/*.exe
