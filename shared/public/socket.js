@@ -1,20 +1,46 @@
 // Gestion connexion Socket.io : session, reconnexion, handlers événements
 
-function updateLeaderFooter(url) {
+let _leaderBaseText = "—";
+let _leaderDotClass = "leader-dot";
+
+function _renderLeaderFooter(userCount) {
+  const label = document.getElementById("leaderLabel");
+  const dot   = document.getElementById("leaderDot");
+  if (!label || !dot) return;
+  const countStr = userCount > 0 ? ` · ${userCount} connecté${userCount > 1 ? "s" : ""}` : "";
+  label.textContent = _leaderBaseText + countStr;
+  dot.className = _leaderDotClass;
+}
+
+function updateLeaderUserCount() {
+  const total = Object.values(channelState).reduce((acc, s) => acc + (s?.users?.length || 0), 0);
+  _renderLeaderFooter(total);
+}
+
+async function updateLeaderFooter(url) {
   const label = document.getElementById("leaderLabel");
   const dot   = document.getElementById("leaderDot");
   if (!label || !dot) return;
   try {
     const u = new URL(url);
     const isLocal = u.hostname === "127.0.0.1" || u.hostname === "localhost";
-    label.textContent = isLocal
-      ? `Serveur local — ${u.hostname}:${u.port}`
-      : `Leader — ${u.hostname}:${u.port}`;
-    dot.className = "leader-dot " + (isLocal ? "local" : "remote");
+    // Récupère le mode depuis l'API de découverte
+    let serverType = isLocal ? "desktop local" : "serveur distant";
+    try {
+      const res = await fetch(`${u.protocol}//${u.host}/api/dewicom-discovery`, { signal: AbortSignal.timeout(2000) });
+      const data = await res.json();
+      if (data.mode === "desktop-local")   serverType = "Desktop local";
+      else if (data.mode === "apk")        serverType = "Android";
+      else if (data.mode === "nodejs")     serverType = "Serveur Node.js";
+      else if (data.mode)                  serverType = data.mode;
+    } catch { /* garde la valeur par défaut */ }
+    _leaderBaseText = `${serverType} — ${u.hostname}:${u.port}`;
+    _leaderDotClass = "leader-dot " + (isLocal ? "local" : (serverType === "Android" ? "apk" : "remote"));
   } catch {
-    label.textContent = url;
-    dot.className = "leader-dot";
+    _leaderBaseText = url;
+    _leaderDotClass = "leader-dot";
   }
+  updateLeaderUserCount();
 }
 
 // Reconnexion transparente vers un nouveau serveur (sans rechargement de page)
@@ -61,6 +87,7 @@ function reconnectToServer(newUrl) {
   socket.on("channel-state", (state) => {
     channelState = state;
     renderChannelStrip();
+    updateLeaderUserCount();
     if (!document.getElementById("usersPanel").classList.contains("hidden")) {
       renderUsersList();
     }
@@ -197,6 +224,7 @@ async function startSession() {
   socket.on("channel-state", (state) => {
     channelState = state;
     renderChannelStrip();
+    updateLeaderUserCount();
     if (!document.getElementById("usersPanel").classList.contains("hidden")) {
       renderUsersList();
     }

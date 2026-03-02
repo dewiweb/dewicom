@@ -5,6 +5,13 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 
 ---
 
+## [1.1.8] — 2026-03-02
+
+### Amélioré
+- **Footer leader enrichi** : affiche maintenant le type de serveur (Desktop local 🟢 / Android 🟠 / Serveur Node.js 🔵) + le nombre de personnes connectées en temps réel, mis à jour à chaque `channel-state`
+
+---
+
 ## [1.1.7] — 2026-03-02
 
 ### Modifié
