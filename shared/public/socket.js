@@ -1,5 +1,22 @@
 // Gestion connexion Socket.io : session, reconnexion, handlers événements
 
+function updateLeaderFooter(url) {
+  const label = document.getElementById("leaderLabel");
+  const dot   = document.getElementById("leaderDot");
+  if (!label || !dot) return;
+  try {
+    const u = new URL(url);
+    const isLocal = u.hostname === "127.0.0.1" || u.hostname === "localhost";
+    label.textContent = isLocal
+      ? `Serveur local — ${u.hostname}:${u.port}`
+      : `Leader — ${u.hostname}:${u.port}`;
+    dot.className = "leader-dot " + (isLocal ? "local" : "remote");
+  } catch {
+    label.textContent = url;
+    dot.className = "leader-dot";
+  }
+}
+
 // Reconnexion transparente vers un nouveau serveur (sans rechargement de page)
 function reconnectToServer(newUrl) {
   if (!myName) return; // pas encore connecté, rien à faire
@@ -15,6 +32,7 @@ function reconnectToServer(newUrl) {
 
   socket.on("connect", () => {
     setConnected(true);
+    updateLeaderFooter(newUrl);
     document.getElementById("connBadge")?.classList.add("live");
     document.getElementById("reconnectBtn").style.display = "none";
     if (directorMode) {
@@ -151,6 +169,7 @@ async function startSession() {
 
   socket.on("connect", () => {
     setConnected(true);
+    updateLeaderFooter(window.location.href);
     document.getElementById("connBadge")?.classList.add("live");
     document.getElementById("reconnectBtn").style.display = "none";
     if (directorMode) {

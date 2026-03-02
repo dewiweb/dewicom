@@ -121,6 +121,19 @@
     .conn-dot.off { background: var(--red); }
     .conn-badge.live { border-color: #22c55e44; background: var(--green-dim); color: var(--green); }
     .topbar-right { display: flex; gap: 6px; }
+
+    /* LEADER FOOTER */
+    .leader-footer {
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 4px 12px; flex-shrink: 0;
+      border-top: 1px solid var(--border); background: var(--surface);
+      font-size: .68rem; color: var(--muted);
+    }
+    .leader-dot {
+      width: 5px; height: 5px; border-radius: 50%; background: var(--muted); flex-shrink: 0;
+    }
+    .leader-dot.local { background: var(--green); }
+    .leader-dot.remote { background: #3b82f6; }
     .icon-btn {
       width: 34px; height: 34px; border-radius: 9px; background: var(--surface2);
       border: 1px solid var(--border); color: var(--text2); font-size: .9rem; cursor: pointer;
@@ -554,6 +567,10 @@
         <span class="ptt-mode-label">PTT</span>
       </label>
     </div>
+  </div>
+  <div class="leader-footer" id="leaderFooter">
+    <div class="leader-dot" id="leaderDot"></div>
+    <span id="leaderLabel">—</span>
   </div>
 </div>
 

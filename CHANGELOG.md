@@ -5,6 +5,13 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 
 ---
 
+## [1.1.6] — 2026-03-02
+
+### Ajouté
+- **Footer leader** : indicateur en bas du `mainScreen` affichant l'IP et le rôle du serveur actif (vert = local, bleu = leader distant), mis à jour automatiquement lors des basculements
+
+---
+
 ## [1.1.5] — 2026-03-02
 
 ### Ajouté
