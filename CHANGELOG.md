@@ -5,6 +5,13 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 
 ---
 
+## [1.1.4] — 2026-03-02
+
+### Corrigé
+- Synchronisation des versions desktop/APK (1.1.3 avait des commits décalés)
+
+---
+
 ## [1.1.3] — 2026-03-02
 
 ### Ajouté
