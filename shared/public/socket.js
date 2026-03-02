@@ -43,9 +43,68 @@ async function updateLeaderFooter(url) {
   updateLeaderUserCount();
 }
 
+// Auto-redécouverte pour navigateur pur (pas d'Electron/APK) après disconnect
+let _rediscoverTimer = null;
+
+async function _checkDewiComServer(url) {
+  try {
+    const res = await fetch(`${url}/api/dewicom-discovery`, { signal: AbortSignal.timeout(1500) });
+    if (res.ok) return url;
+  } catch { /* pas de serveur ici */ }
+  return null;
+}
+
+async function _browserRediscover() {
+  if (window.DewiComDesktop) return; // Electron gère lui-même
+  if (!myName) return;               // pas encore en session
+
+  // 1. Tente l'URL courante en premier (serveur redémarré sur même IP)
+  const currentUrl = window.location.origin;
+  if (await _checkDewiComServer(currentUrl)) {
+    reconnectToServer(currentUrl);
+    return;
+  }
+
+  // 2. Scan du subnet local — extrait l'IP courante depuis l'URL
+  const match = window.location.hostname.match(/^(\d+\.\d+\.\d+)\.(\d+)$/);
+  if (!match) return; // pas une IP LAN, impossible de scanner
+  const subnet = match[1];
+  const currentOctet = parseInt(match[2]);
+  const port = window.location.port || "3001";
+  const protocol = window.location.protocol;
+
+  // Priorité : IPs proches ±15, puis IPs communes
+  const candidates = [];
+  for (let d = -15; d <= 15; d++) {
+    const i = currentOctet + d;
+    if (i >= 1 && i <= 254 && i !== currentOctet) candidates.push(i);
+  }
+  for (const i of [1, 2, 10, 20, 50, 100, 200, 254]) {
+    if (!candidates.includes(i) && i !== currentOctet) candidates.push(i);
+  }
+
+  // Scan par batch de 10 avec timeout court
+  const BATCH = 10;
+  for (let i = 0; i < candidates.length; i += BATCH) {
+    const batch = candidates.slice(i, i + BATCH);
+    const results = await Promise.all(
+      batch.map(octet => _checkDewiComServer(`${protocol}//${subnet}.${octet}:${port}`))
+    );
+    const found = results.find(r => r !== null);
+    if (found) {
+      console.log("[rediscover] Nouveau leader trouvé:", found);
+      reconnectToServer(found);
+      return;
+    }
+  }
+  console.log("[rediscover] Aucun serveur DewiCom trouvé sur le subnet");
+}
+
 // Reconnexion transparente vers un nouveau serveur (sans rechargement de page)
 function reconnectToServer(newUrl) {
   if (!myName) return; // pas encore connecté, rien à faire
+  // Annule la redécouverte auto si server-redirect est arrivé
+  if (_rediscoverTimer) { clearTimeout(_rediscoverTimer); _rediscoverTimer = null; }
   console.log("[socket] Basculement vers nouveau leader:", newUrl);
   addActivityEntry("Basculement vers le nouveau serveur leader…", "🔄", "#f59e0b");
   if (socket) {
@@ -75,6 +134,10 @@ function reconnectToServer(newUrl) {
     setConnected(false);
     document.getElementById("connBadge")?.classList.remove("live");
     document.getElementById("reconnectBtn").style.display = "inline-block";
+    if (!window.DewiComDesktop) {
+      if (_rediscoverTimer) clearTimeout(_rediscoverTimer);
+      _rediscoverTimer = setTimeout(() => { _rediscoverTimer = null; _browserRediscover(); }, 2000);
+    }
   });
 
   socket.on("channels-init", (chs) => {
@@ -216,6 +279,10 @@ async function startSession() {
     setConnected(false);
     document.getElementById("connBadge")?.classList.remove("live");
     document.getElementById("reconnectBtn").style.display = "inline-block";
+    if (!window.DewiComDesktop) {
+      if (_rediscoverTimer) clearTimeout(_rediscoverTimer);
+      _rediscoverTimer = setTimeout(() => { _rediscoverTimer = null; _browserRediscover(); }, 2000);
+    }
   });
 
   socket.on("channels-init", (chs) => {
