@@ -324,11 +324,16 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void stopAll() {
+        if (leaderElection != null) { leaderElection.stop(); leaderElection = null; }
+        if (localWebServer != null) { localWebServer.stop(); localWebServer = null; }
+        if (executor != null && !executor.isShutdown()) executor.shutdownNow();
+    }
+
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        if (leaderElection != null) leaderElection.stop();
-        if (executor != null && !executor.isShutdown()) executor.shutdown();
-        if (localWebServer != null && localWebServer.isAlive()) localWebServer.stop();
+        stopAll();
     }
+
 }

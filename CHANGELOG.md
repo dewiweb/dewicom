@@ -5,6 +5,13 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 
 ---
 
+## [1.2.2] — 2026-03-02
+
+### Corrigé
+- **Arrêt serveur APK au swipe** : `onDestroy()` seul ne suffit pas — Android peut tuer le process sans l'appeler. Ajout de `android:stopWithTask="true"` dans le Manifest (garantit l'arrêt du process au swipe depuis le switcher) et refactorisation en `stopAll()` pour `leaderElection` + `LocalWebServer` + `executor`
+
+---
+
 ## [1.2.1] — 2026-03-02
 
 ### Corrigé
