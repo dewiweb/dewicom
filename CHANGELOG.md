@@ -5,6 +5,20 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 
 ---
 
+## [1.1.11] — 2026-03-02
+
+### Corrigé
+- **crypto.randomUUID** : fallback UUID v4 manuel pour contextes HTTP non-sécurisés (navigateur LAN)
+- **Reconnexion desktop** : ré-élection leader après passage follower recharge la WebView sur `127.0.0.1`
+- **Reconnexion APK** : basculement follower→leader recharge la WebView sur `http://127.0.0.1:3001`
+- **Navigateur pur** : auto-redécouverte subnet sur disconnect (scan HTTP `/api/dewicom-discovery`)
+
+### Amélioré
+- **APK UI** : footer leader avec indicateur coloré, icône PTT image, `reconnectToServer` porté depuis desktop
+- **CI** : APK de release renommé `DewiCom-vX.X.X.apk`
+
+---
+
 ## [1.1.10] — 2026-03-02
 
 ### Corrigé
