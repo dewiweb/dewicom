@@ -320,9 +320,8 @@ async function startSession() {
   });
 
   document.getElementById("pttModeToggle").addEventListener("change", (e) => {
-    pttMode = !e.target.checked;
+    pttMode = e.target.checked;
     document.querySelector(".ptt-mode-label").textContent = pttMode ? "PTT" : "Toggle";
-    document.querySelector(".ptt-text").textContent = pttMode ? "Maintenir pour parler" : "Cliquer pour parler";
     if (window.updatePTTMode) window.updatePTTMode();
     addActivityEntry(pttMode ? "Mode PTT activé" : "Mode Toggle activé", "🎙️", "#3b82f6");
   });

@@ -5,6 +5,15 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 
 ---
 
+## [1.1.10] — 2026-03-02
+
+### Corrigé
+- **Toggle PTT/Toggle** : bug logique inversée corrigé (`checked=true` = PTT, un seul switch suffit maintenant)
+- **Bouton PTT** : texte "Maintenir pour parler" supprimé, icône agrandie à 100px pour occuper tout le bouton
+- **Barre raccourcis** : lignes "Mobile / Clavier / Kit filaire" supprimées de l'UI
+
+---
+
 ## [1.1.9] — 2026-03-02
 
 ### Ajouté

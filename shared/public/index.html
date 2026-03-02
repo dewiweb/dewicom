@@ -311,18 +311,12 @@
     }
     .ptt-btn.pressed::after { border-color: #22c55e44; }
     .ptt-mic-icon {
-      width: 72px; height: 72px; border-radius: 18px;
+      width: 100px; height: 100px; border-radius: 24px;
       filter: drop-shadow(0 0 8px #22c55e00);
       transition: filter .08s;
       pointer-events: none; user-select: none;
     }
     .ptt-btn.pressed .ptt-mic-icon { filter: drop-shadow(0 0 12px #22c55eaa) brightness(1.15); }
-    .ptt-text {
-      font-size: .65rem; font-weight: 800; color: var(--muted);
-      text-transform: uppercase; letter-spacing: .12em;
-    }
-    .ptt-btn.pressed .ptt-text { color: var(--green); }
-
     /* BOTTOM HINT */
     .ptt-hint {
       font-size: .65rem; color: var(--muted); text-align: center;
@@ -552,17 +546,10 @@
       <button class="call-btn" id="callBtn" title="Appeler le canal">📞</button>
       <div class="ptt-btn" id="pttBtn">
         <img class="ptt-mic-icon" src="/icon.png" alt="PTT" draggable="false" />
-        <div class="ptt-text">Maintenir pour parler</div>
       </div>
       <div style="width:52px"></div>
     </div>
     <div class="ptt-hint">
-      <span>Mobile : appui long</span>
-      <span>·</span>
-      <span>Clavier : <span class="hint-key">Espace</span> <span class="hint-key">Enter</span> <span class="hint-key">Z</span> <span class="hint-key">X</span></span>
-      <span>·</span>
-      <span>Kit filaire : <span class="hint-key">Play/Pause</span> <span class="hint-key">Next</span> <span class="hint-key">Prev</span></span>
-      <span>·</span>
       <label class="ptt-mode-toggle">
         <input type="checkbox" id="pttModeToggle" checked>
         <span class="slider-small"></span>
