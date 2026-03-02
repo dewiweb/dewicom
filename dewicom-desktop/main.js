@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, session } = require("electron");
+const { app, BrowserWindow, ipcMain, session, Menu } = require("electron");
 const dgram = require("dgram");
 const path = require("path");
 const os = require("os");
@@ -52,6 +52,7 @@ function createWindow() {
     minHeight: 600,
     title: "DewiCom",
     backgroundColor: "#1a1a2e",
+    autoHideMenuBar: true,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -59,6 +60,21 @@ function createWindow() {
     },
     icon: path.join(__dirname, "assets", "icon.png"),
   });
+  Menu.setApplicationMenu(null);
+
+  if (app.isPackaged) {
+    mainWindow.webContents.on("before-input-event", (event, input) => {
+      if (
+        input.key === "F12" ||
+        (input.control && input.shift && input.key === "I") ||
+        (input.control && input.shift && input.key === "J") ||
+        (input.control && input.key === "R") ||
+        (input.control && input.key === "F5")
+      ) {
+        event.preventDefault();
+      }
+    });
+  }
 
   // Charge la page de chargement pendant la découverte
   mainWindow.loadFile(path.join(__dirname, "loading.html"));
