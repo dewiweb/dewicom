@@ -12,7 +12,6 @@ import com.google.zxing.common.BitMatrix;
 import com.google.zxing.qrcode.QRCodeWriter;
 
 import fi.iki.elonen.NanoHTTPD;
-import com.dewicom.BuildConfig;
 
 import org.java_websocket.WebSocket;
 import org.java_websocket.handshake.ClientHandshake;
@@ -35,6 +34,7 @@ import java.util.TimerTask;
 
 public class LocalWebServer {
     private static final String TAG = "LocalWebServer";
+    private static final String APP_VERSION = "1.2.0";
     public static final int HTTP_PORT = 3001;
     public static final int WS_PORT = 3002;
 
@@ -144,7 +144,7 @@ public class LocalWebServer {
             Log.d(TAG, "HTTP: " + uri);
 
             if (uri.equals("/api/dewicom-discovery") || uri.equals("/api/ping")) {
-                String json = "{\"service\":\"DewiCom\",\"version\":\"" + BuildConfig.VERSION_NAME + "\",\"status\":\"running\",\"mode\":\"apk\"}";
+                String json = "{\"service\":\"DewiCom\",\"version\":\"" + APP_VERSION + "\",\"status\":\"running\",\"mode\":\"apk\"}";
                 Response r = newFixedLengthResponse(Response.Status.OK, "application/json", json);
                 r.addHeader("Access-Control-Allow-Origin", "*");
                 return r;
