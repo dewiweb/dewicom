@@ -5,6 +5,14 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 
 ---
 
+## [1.1.2] — 2026-03-02
+
+### Corrigé
+- **Menu natif supprimé** : `Menu.setApplicationMenu(null)` — plus d'accès au menu Electron en production
+- **DevTools bloqués en production** : `F12`, `Ctrl+Shift+I`, `Ctrl+Shift+J`, `Ctrl+R`, `F5` désactivés quand l'app est packagée (`app.isPackaged`), actifs en développement
+
+---
+
 ## [1.1.1] — 2026-03-02
 
 ### Ajouté
