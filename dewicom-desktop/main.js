@@ -239,12 +239,26 @@ async function discoverServer() {
   }
 
   // Lance l'élection — résolu asynchroniquement via les callbacks
+  let resolved = false;
   return new Promise((resolve) => {
     leaderElection = new LeaderElection({
       onBecomeLeader: (myIP) => {
         console.log(`[election] LEADER élu: ${myIP} — serveur local actif`);
         sendToWindow("discovery-status", `Leader — serveur actif sur ${myIP}:3001`);
-        resolve({ ip: "127.0.0.1", port: 3001, protocol: "http" });
+        const localServer_ = { ip: "127.0.0.1", port: 3001, protocol: "http" };
+        if (!resolved) {
+          resolved = true;
+          resolve(localServer_);
+        } else {
+          // Ré-élection : le desktop reprend le leadership après avoir été follower
+          console.log(`[election] RE-LEADER: rechargement WebView sur 127.0.0.1:3001`);
+          discoveredServer = localServer_;
+          if (!localServerRunning) {
+            localServer.start().then(() => { localServerRunning = true; }).catch(() => {});
+          }
+          setupMediaPermissions("http://127.0.0.1:3001");
+          if (mainWindow && !mainWindow.isDestroyed()) mainWindow.loadURL("http://127.0.0.1:3001");
+        }
       },
       onLeaderElected: async (leaderIP) => {
         console.log(`[election] FOLLOWER — leader: ${leaderIP}`);
@@ -259,16 +273,17 @@ async function discoverServer() {
         await new Promise(r => setTimeout(r, 300)); // laisse le temps au message de partir
         localServer.stop();
         localServerRunning = false;
-        if (discoveredServer) {
-          // Page déjà chargée → basculer sans rechargement
+        if (!resolved) {
+          // Premier chargement — loadURL classique
+          resolved = true;
+          if (mainWindow && !mainWindow.isDestroyed()) mainWindow.loadURL(url);
+          resolve(newServer);
+        } else {
+          // Ré-élection : basculement vers un nouveau leader
           discoveredServer = newServer;
           setupMediaPermissions(url);
           sendToWindow("server-changed", url);
-        } else {
-          // Premier chargement — loadURL classique
-          if (mainWindow && !mainWindow.isDestroyed()) mainWindow.loadURL(url);
         }
-        resolve(newServer);
       },
     });
     leaderElection.start();
