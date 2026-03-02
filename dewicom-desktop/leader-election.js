@@ -193,35 +193,42 @@ class LeaderElection {
     switch (type) {
       case "ELECTION":
         if (senderId > this.myNodeId) {
-          // ID supérieur reçu → on annule notre candidature
+          // ID supérieur reçu → on se retire quelle que soit notre état (CANDIDATE ou LEADER)
+          if (this.state === "LEADER") {
+            // Un nœud supérieur arrive ou revient : on cède immédiatement
+            console.log(`[election] ELECTION d'un supérieur (${senderId}) alors qu'on est LEADER — démission`);
+            this._stopHeartbeat();
+            this.leaderIP = null;
+          }
           if (this.state === "CANDIDATE") {
             clearTimeout(this._electionTimer);
             this._electionPending = false;
-            this.state = "FOLLOWER";
           }
-          // Reset lastHeartbeat pour laisser le temps au supérieur de se proclamer
+          this.state = "FOLLOWER";
+          // Reset lastHeartbeat pour laisser le supérieur le temps de se proclamer
           this.lastHeartbeat = Date.now();
+          this._startWatchdog(); // surveille que le supérieur se proclame bien
           // Protocole Bully : répondre OK pour signaler qu'on se déférence
           this._broadcast(`OK:${this.myNodeId}:${this.myIP}`);
         } else if (senderId < this.myNodeId) {
-          // Notre ID est plus grand → on démarre notre propre élection (avec cooldown)
-          // Ne pas juste re-broadcaster ELECTION : ça crée des storms avec N nœuds
+          // Notre ID est plus grand → on démarre notre propre élection (anti-storm)
           if (!this._electionPending) {
             this._startElection();
           } else {
-            this._broadcastElection(); // on est déjà candidat, on re-broadcast avec cooldown
+            this._broadcastElection(); // déjà candidat, re-broadcast avec cooldown
           }
         }
-        // Si senderId === myNodeId : collision d'IP improbable, on ignore
+        // senderId === myNodeId : collision d'IP improbable, ignoré
         break;
 
       case "OK":
-        // Un nœud supérieur a pris le relais — on annule notre candidature
+        // Un nœud supérieur prend le relais — on annule notre candidature
         if (this.state === "CANDIDATE" && senderId > this.myNodeId) {
           clearTimeout(this._electionTimer);
           this._electionPending = false;
           this.state = "FOLLOWER";
           this.lastHeartbeat = Date.now();
+          this._startWatchdog();
         }
         break;
 

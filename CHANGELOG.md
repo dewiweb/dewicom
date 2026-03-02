@@ -5,6 +5,16 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 
 ---
 
+## [1.2.5] — 2026-03-02
+
+### Corrigé
+- **Arrivée/départ dynamique de nœuds sans perturbation** :
+  - **Bug critique : LEADER qui se démet sur ELECTION supérieur** — un leader qui recevait `ELECTION` d'un nœud supérieur (ex: Desktop qui arrive sur un réseau où un APK est leader) ne se démettait pas : il répondait `OK` mais restait `LEADER` et continuait de broadcaster `HEARTBEAT` → deux leaders simultanés pendant `ELECTION_WAIT` (2s). Fix : sur réception de `ELECTION` d'un supérieur, le leader arrête son heartbeat, passe en `FOLLOWER` immédiatement et démarre son watchdog pour attendre le `LEADER` broadcast du supérieur — `LeaderElection.java` + `leader-election.js`
+  - Ce fix couvre aussi le cas **retour de l'ancien leader** (même scénario : revient avec le même nodeId supérieur, l'actuel leader cède immédiatement)
+  - `startWatchdog()` ajouté dans le handler `OK` pour les nœuds CANDIDATE qui se retirent
+
+---
+
 ## [1.2.4] — 2026-03-02
 
 ### Corrigé

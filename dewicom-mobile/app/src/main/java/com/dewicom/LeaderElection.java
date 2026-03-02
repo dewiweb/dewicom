@@ -173,16 +173,22 @@ public class LeaderElection {
         switch (type) {
             case "ELECTION":
                 if (senderId > myNodeId) {
-                    // ID supérieur → annule notre candidature
-                    Log.d(TAG, "ELECTION d'un plus grand nodeId (" + senderId + ") — déférence");
+                    // ID supérieur reçu → on se retire quel que soit notre état (CANDIDATE ou LEADER)
+                    Log.d(TAG, "ELECTION d'un plus grand nodeId (" + senderId + ") — démission");
+                    if (state == State.LEADER) {
+                        // Un nœud supérieur arrive ou revient : on cède immédiatement
+                        stopHeartbeat();
+                        currentLeaderIP.set(null);
+                    }
                     if (state == State.CANDIDATE) {
                         if (electionTask != null) { electionTask.cancel(false); electionTask = null; }
                         electionPending = false;
-                        state = State.FOLLOWER;
                     }
-                    // Reset lastHeartbeat pour laisser le supérieur se proclamer
+                    state = State.FOLLOWER;
+                    // Reset lastHeartbeat pour laisser le supérieur le temps de se proclamer
                     lastHeartbeat.set(System.currentTimeMillis());
-                    // Protocole Bully : répondre OK pour signaler qu'on se déférence
+                    startWatchdog(); // surveille que le supérieur se proclame bien
+                    // Protocole Bully : répondre OK
                     broadcast("OK:" + myNodeId + ":" + myIP);
                 } else if (senderId < myNodeId) {
                     // Notre ID est plus grand → on démarre notre propre élection (anti-storm)
@@ -203,6 +209,7 @@ public class LeaderElection {
                     electionPending = false;
                     state = State.FOLLOWER;
                     lastHeartbeat.set(System.currentTimeMillis());
+                    startWatchdog();
                 }
                 break;
 

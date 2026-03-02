@@ -34,7 +34,7 @@ import java.util.TimerTask;
 
 public class LocalWebServer {
     private static final String TAG = "LocalWebServer";
-    private static final String APP_VERSION = "1.2.4";
+    private static final String APP_VERSION = "1.2.5";
     public static final int HTTP_PORT = 3001;
     public static final int WS_PORT = 3002;
 
