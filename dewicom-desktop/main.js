@@ -255,8 +255,17 @@ async function discoverServer() {
         const detected = await checkServer(leaderIP, 3001);
         const protocol = detected?.protocol || "http";
         const url = `${protocol}://${leaderIP}:3001`;
-        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.loadURL(url);
-        resolve({ ip: leaderIP, port: 3001, protocol });
+        const newServer = { ip: leaderIP, port: 3001, protocol };
+        if (discoveredServer) {
+          // Page déjà chargée → basculer sans rechargement
+          discoveredServer = newServer;
+          setupMediaPermissions(url);
+          sendToWindow("server-changed", url);
+        } else {
+          // Premier chargement — loadURL classique
+          if (mainWindow && !mainWindow.isDestroyed()) mainWindow.loadURL(url);
+        }
+        resolve(newServer);
       },
     });
     leaderElection.start();

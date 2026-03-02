@@ -5,6 +5,16 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 
 ---
 
+## [1.1.5] — 2026-03-02
+
+### Ajouté
+- **Basculement leader transparent** : quand le leader change en cours de session, l'app se reconnecte automatiquement sans retourner au formulaire de départ
+  - Desktop Electron : `server-changed` IPC → `reconnectToServer(url)` dans `socket.js`
+  - APK Android : `evaluateJavascript` → `window.reconnectSocket(ip)` dans `socket.js`
+  - Le nom, le canal et les paramètres director sont conservés après basculement
+
+---
+
 ## [1.1.4] — 2026-03-02
 
 ### Corrigé

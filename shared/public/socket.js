@@ -1,4 +1,89 @@
 // Gestion connexion Socket.io : session, reconnexion, handlers événements
+
+// Reconnexion transparente vers un nouveau serveur (sans rechargement de page)
+function reconnectToServer(newUrl) {
+  if (!myName) return; // pas encore connecté, rien à faire
+  console.log("[socket] Basculement vers nouveau leader:", newUrl);
+  addActivityEntry("Basculement vers le nouveau serveur leader…", "🔄", "#f59e0b");
+  if (socket) {
+    socket.off(); // retire tous les listeners pour éviter les doublons
+    socket.disconnect();
+    socket = null;
+  }
+  // Reconnecte sur la nouvelle URL en conservant nom/canal
+  socket = io(newUrl, { transports: ["websocket"] });
+
+  socket.on("connect", () => {
+    setConnected(true);
+    document.getElementById("connBadge")?.classList.add("live");
+    document.getElementById("reconnectBtn").style.display = "none";
+    if (directorMode) {
+      const listenChannels = Object.keys(channelStates).filter(id => channelStates[id]?.listen);
+      const talkChannels   = Object.keys(channelStates).filter(id => channelStates[id]?.talk);
+      socket.emit("join", { clientId, name: myName, channel: myChannel, listenChannels, talkChannels });
+    } else {
+      socket.emit("join", { clientId, name: myName, channel: myChannel });
+    }
+    addActivityEntry("Reconnecté au nouveau leader", "✅", "#22c55e");
+  });
+
+  socket.on("disconnect", () => {
+    setConnected(false);
+    document.getElementById("connBadge")?.classList.remove("live");
+    document.getElementById("reconnectBtn").style.display = "inline-block";
+  });
+
+  socket.on("channels-init", (chs) => {
+    channels = chs;
+    renderChannelStrip();
+    renderMonitoringControls();
+    renderChannelSelect();
+  });
+
+  socket.on("channel-state", (state) => {
+    channelState = state;
+    renderChannelStrip();
+    if (!document.getElementById("usersPanel").classList.contains("hidden")) {
+      renderUsersList();
+    }
+  });
+
+  socket.on("audio-chunk", ({ from, chunk }) => {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+    playChunk(chunk);
+  });
+
+  socket.on("ptt-state", ({ from, fromId, channel, speaking: isSpeaking }) => {
+    if (fromId === socket.id) return;
+    updateSpeakingEntry(fromId, from, channel, isSpeaking);
+  });
+
+  socket.on("user-joined", ({ name, channel }) => {
+    addActivityEntry(`${name} a rejoint ${getChannelName(channel)}`, "🟢", "#22c55e");
+  });
+
+  socket.on("user-left", ({ name, channel }) => {
+    addActivityEntry(`${name} a quitté ${getChannelName(channel)}`, "🔴", "#ef4444");
+  });
+
+  socket.on("call-ring", ({ from, channel }) => {
+    showRingAlert(from, channel);
+    addActivityEntry(`${from} appelle — ${getChannelName(channel)}`, "📞", "#f59e0b");
+  });
+}
+
+// Écoute le changement de leader depuis Electron (sans rechargement de page)
+if (window.DewiComDesktop?.onServerChanged) {
+  window.DewiComDesktop.onServerChanged((url) => reconnectToServer(url));
+}
+
+// Alias global appelé par MainActivity.java via evaluateJavascript sur APK Android
+window.reconnectSocket = function(ip) {
+  const protocol = window.location.protocol || "http:";
+  const port = window.location.port || "3001";
+  reconnectToServer(`${protocol}//${ip}:${port}`);
+};
+
 function manualReconnect() {
   const btn = document.getElementById("reconnectBtn");
   btn.textContent = "…";
