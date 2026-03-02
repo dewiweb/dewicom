@@ -125,12 +125,19 @@ jobs:
       - name: Build APK
         run: chmod +x dewicom-mobile/gradlew && cd dewicom-mobile && ./gradlew assembleRelease --no-daemon
 
+      - name: Rename APK with version
+        run: |
+          VERSION="${{ github.ref_name }}"
+          SRC="dewicom-mobile/app/build/outputs/apk/release/app-release.apk"
+          DST="dewicom-mobile/app/build/outputs/apk/release/DewiCom-${VERSION}.apk"
+          if [ -f "$SRC" ]; then mv "$SRC" "$DST"; fi
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: android-apk
           path: |
-            dewicom-mobile/app/build/outputs/apk/release/*.apk
+            dewicom-mobile/app/build/outputs/apk/release/DewiCom-*.apk
             dewicom-mobile/app/build/outputs/apk/debug/*.apk
 
   # ── GitHub Release ─────────────────────────────────────────────────────────────

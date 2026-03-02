@@ -1,5 +1,34 @@
 // Gestion connexion socket mobile : WS natif (APK Java), Socket.io (nodejs), reconnexion leader
 
+let _leaderBaseText = "—";
+let _leaderDotClass = "leader-dot";
+
+function _renderLeaderFooter(userCount) {
+  const label = document.getElementById("leaderLabel");
+  const dot   = document.getElementById("leaderDot");
+  if (!label || !dot) return;
+  const countStr = userCount > 0 ? ` · ${userCount} connecté${userCount > 1 ? "s" : ""}` : "";
+  label.textContent = _leaderBaseText + countStr;
+  dot.className = _leaderDotClass;
+}
+
+function updateLeaderUserCount() {
+  const total = Object.values(channelState).reduce((acc, s) => acc + (s?.users?.length || 0), 0);
+  _renderLeaderFooter(total);
+}
+
+function updateLeaderFooter(ip, mode) {
+  const isLocal = (ip === "127.0.0.1" || ip === "localhost");
+  let serverType = isLocal ? "Android local" : "Serveur distant";
+  if (mode === "apk")        serverType = "Android";
+  else if (mode === "local") serverType = "Android local";
+  else if (mode === "nodejs") serverType = "Serveur Node.js";
+  else if (mode === "desktop-local") serverType = "Desktop local";
+  _leaderBaseText = `${serverType} — ${ip}:3001`;
+  _leaderDotClass = "leader-dot " + (isLocal ? "local" : (mode === "apk" ? "apk" : "remote"));
+  updateLeaderUserCount();
+}
+
 function _emitJoin(sock) {
   if (!myName || !myChannel) return;
   const listenChannels = Object.keys(channelStates || {}).filter(id => channelStates[id]?.listen);
@@ -7,9 +36,10 @@ function _emitJoin(sock) {
   sock.emit("join", { clientId, name: myName, channel: myChannel, listenChannels, talkChannels });
 }
 
-function _registerSocketHandlers(sock) {
+function _registerSocketHandlers(sock, ip, mode) {
   sock.on("connect", () => {
     setConnected(true);
+    updateLeaderFooter(ip, mode);
     document.getElementById("connBadge")?.classList.add("live");
     document.getElementById("reconnectBtn").style.display = "none";
     _emitJoin(sock);
@@ -33,6 +63,7 @@ function _registerSocketHandlers(sock) {
   sock.on("channel-state", (state) => {
     channelState = state;
     renderChannelStrip();
+    updateLeaderUserCount();
     if (!document.getElementById("usersPanel").classList.contains("hidden")) renderUsersList();
   });
   sock.on("channels-init", (chs) => {
@@ -91,27 +122,42 @@ function makeNativeSocket(ip) {
   return sock;
 }
 
-// Appelée par Java lors d'un changement de leader (ou par manualReconnect)
-window.reconnectSocket = function(newLeaderIP) {
-  console.log("[leader] Nouveau leader →", newLeaderIP, "reconnexion...");
-  if (newLeaderIP !== null) window.dewicomServerIP = newLeaderIP;
-  const ip = window.dewicomServerIP || "127.0.0.1";
-  const mode = (ip === "127.0.0.1") ? "local" : (window.dewicomServerMode || "nodejs");
-  const useWS = (ip === "127.0.0.1" || mode === "apk" || mode === "local");
+// Reconnexion transparente vers un nouveau leader (sans rechargement de page)
+function reconnectToServer(ip, mode) {
+  if (!myName) return;
+  if (ip !== null) window.dewicomServerIP = ip;
+  if (mode) window.dewicomServerMode = mode;
+  const targetIP   = window.dewicomServerIP || "127.0.0.1";
+  const targetMode = window.dewicomServerMode || (targetIP === "127.0.0.1" ? "local" : "nodejs");
+  const useWS = (targetIP === "127.0.0.1" || targetMode === "apk" || targetMode === "local");
+
+  console.log("[leader] Basculement →", targetIP, "mode:", targetMode, "ws:", useWS);
+  addActivityEntry("Basculement vers le nouveau serveur leader…", "🔄", "#f59e0b");
+
   try {
     if (socket && socket._ws) socket._ws.close();
-    else if (socket && socket.disconnect) socket.disconnect();
+    else if (socket && socket.disconnect) { socket.off(); socket.disconnect(); }
   } catch(e) {}
+  socket = null;
+
   if (useWS) {
-    socket = makeNativeSocket(ip);
+    socket = makeNativeSocket(targetIP);
   } else {
-    socket = io("http://" + ip + ":3001", { transports: ["websocket"] });
+    socket = io("http://" + targetIP + ":3001", { transports: ["websocket"] });
   }
-  _registerSocketHandlers(socket);
-  // Si déjà connecté (ex: retour sur 127.0.0.1), force le join immédiatement
-  const isNativeConnected = useWS && socket._ws && socket._ws.readyState === WebSocket.OPEN;
+  _registerSocketHandlers(socket, targetIP, targetMode);
+  // Si déjà connecté (WS déjà OPEN), force le join immédiatement
+  const isNativeOpen = useWS && socket._ws && socket._ws.readyState === WebSocket.OPEN;
   const isIoConnected = !useWS && socket.connected;
-  if (isNativeConnected || isIoConnected) _emitJoin(socket);
+  if (isNativeOpen || isIoConnected) {
+    updateLeaderFooter(targetIP, targetMode);
+    _emitJoin(socket);
+  }
+}
+
+// Appelée par MainActivity.java via evaluateJavascript
+window.reconnectSocket = function(newLeaderIP, newMode) {
+  reconnectToServer(newLeaderIP, newMode || window.dewicomServerMode);
 };
 
 function manualReconnect() {
@@ -120,14 +166,8 @@ function manualReconnect() {
   btn.disabled = true;
   if (window.DewiComAndroid?.requestRediscovery) {
     window.DewiComAndroid.requestRediscovery();
-  } else if (typeof window.reconnectSocket === "function") {
-    window.reconnectSocket(null);
-  } else if (socket && socket.disconnect) {
-    socket.disconnect();
-    socket.connect();
   } else {
-    startSession();
-    return;
+    reconnectToServer(null, null);
   }
   setTimeout(() => {
     btn.textContent = "↺ Reconnecter";
@@ -173,20 +213,19 @@ async function startSession() {
   if (typeof window.DewiComAndroid !== "undefined" && !window.dewicomServerIP) {
     window.dewicomServerIP = window.DewiComAndroid.getServerIP() || "127.0.0.1";
   }
-  const isAPK = window.location.protocol === "file:" || window.location.hostname === "127.0.0.1";
-  const serverIP = window.dewicomServerIP || "127.0.0.1";
+  const serverIP   = window.dewicomServerIP || "127.0.0.1";
   const serverMode = window.dewicomServerMode || (serverIP === "127.0.0.1" ? "local" : "nodejs");
-  const useNativeWS = isAPK && (serverIP === "127.0.0.1" || serverMode === "apk");
+  const useNativeWS = (serverIP === "127.0.0.1" || serverMode === "apk" || serverMode === "local");
 
   if (useNativeWS) {
     socket = makeNativeSocket(serverIP);
   } else {
-    const socketUrl = isAPK ? "http://" + serverIP + ":3001" : window.location.origin;
+    const socketUrl = "http://" + serverIP + ":3001";
     console.log("[socket] Connexion Socket.io →", socketUrl);
     socket = io(socketUrl, { transports: ["websocket"] });
   }
 
-  _registerSocketHandlers(socket);
+  _registerSocketHandlers(socket, serverIP, serverMode);
 
   // Afficher l'écran principal
   document.getElementById("joinScreen").classList.add("hidden");
@@ -240,9 +279,8 @@ async function startSession() {
   });
 
   document.getElementById("pttModeToggle").addEventListener("change", (e) => {
-    pttMode = !e.target.checked;
+    pttMode = e.target.checked;
     document.querySelector(".ptt-mode-label").textContent = pttMode ? "PTT" : "Toggle";
-    document.querySelector(".ptt-text").textContent = pttMode ? "Maintenir pour parler" : "Cliquer pour parler";
     if (window.updatePTTMode) window.updatePTTMode();
     addActivityEntry(pttMode ? "Mode PTT activé" : "Mode Toggle activé", "🎙️", "#3b82f6");
   });

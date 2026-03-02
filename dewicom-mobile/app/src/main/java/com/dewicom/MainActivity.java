@@ -238,20 +238,27 @@ public class MainActivity extends Activity {
                     try { localWebServer.start(); Log.d("MainActivity", "LocalWebServer redémarré (leader)"); }
                     catch (java.io.IOException e) { Log.e("MainActivity", "Erreur redémarrage serveur: " + e.getMessage()); }
                 }
+                final boolean wasFollower = pendingRemoteIP != null;
                 foundServerIP = "127.0.0.1";
                 foundServerMode = "local";
                 scanComplete = true;
                 pendingRemoteIP = null;
-                Log.d("MainActivity", "LEADER élu: " + myIP);
+                Log.d("MainActivity", "LEADER élu: " + myIP + " (wasFollower=" + wasFollower + ")");
                 runOnUiThread(() -> {
                     Toast.makeText(MainActivity.this,
                         "👑 Leader — serveur actif sur " + myIP + ":3001",
                         Toast.LENGTH_LONG).show();
-                    webView.evaluateJavascript(
-                        "window.dewicomServerIP='127.0.0.1';" +
-                        "window.dewicomServerMode='local';" +
-                        "window.dewicomScanComplete=true;" +
-                        "if(typeof reconnectSocket==='function') reconnectSocket('127.0.0.1');", null);
+                    if (wasFollower) {
+                        // Était follower : la WebView pointe encore sur l'ancien leader
+                        // On recharge sur le serveur local pour rétablir le contexte WS natif
+                        webView.loadUrl("http://127.0.0.1:3001");
+                    } else {
+                        webView.evaluateJavascript(
+                            "window.dewicomServerIP='127.0.0.1';" +
+                            "window.dewicomServerMode='local';" +
+                            "window.dewicomScanComplete=true;" +
+                            "if(typeof reconnectSocket==='function') reconnectSocket('127.0.0.1','local');", null);
+                    }
                 });
             }
 
@@ -277,7 +284,7 @@ public class MainActivity extends Activity {
                         "window.dewicomServerIP='" + leaderIP + "';" +
                         "window.dewicomServerMode='" + mode + "';" +
                         "window.dewicomScanComplete=true;" +
-                        "if(typeof reconnectSocket==='function') reconnectSocket('" + leaderIP + "');",
+                        "if(typeof reconnectSocket==='function') reconnectSocket('" + leaderIP + "','" + mode + "');",
                         null);
                 });
             }
