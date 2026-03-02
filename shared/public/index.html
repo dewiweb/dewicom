@@ -310,11 +310,12 @@
     }
     .ptt-btn.pressed::after { border-color: #22c55e44; }
     .ptt-mic-icon {
-      font-size: 2.4rem; line-height: 1;
+      width: 72px; height: 72px; border-radius: 18px;
       filter: drop-shadow(0 0 8px #22c55e00);
       transition: filter .08s;
+      pointer-events: none; user-select: none;
     }
-    .ptt-btn.pressed .ptt-mic-icon { filter: drop-shadow(0 0 8px #22c55e88); }
+    .ptt-btn.pressed .ptt-mic-icon { filter: drop-shadow(0 0 12px #22c55eaa) brightness(1.15); }
     .ptt-text {
       font-size: .65rem; font-weight: 800; color: var(--muted);
       text-transform: uppercase; letter-spacing: .12em;
@@ -549,7 +550,7 @@
     <div class="ptt-actions">
       <button class="call-btn" id="callBtn" title="Appeler le canal">📞</button>
       <div class="ptt-btn" id="pttBtn">
-        <div class="ptt-mic-icon">🎙️</div>
+        <img class="ptt-mic-icon" src="/icon.png" alt="PTT" draggable="false" />
         <div class="ptt-text">Maintenir pour parler</div>
       </div>
       <div style="width:52px"></div>

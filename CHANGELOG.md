@@ -5,6 +5,13 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 
 ---
 
+## [1.1.7] — 2026-03-02
+
+### Modifié
+- **Bouton PTT** : l'emoji 🎙️ remplacé par l'icône de l'app (`icon.png`) — effet glow vert au press
+
+---
+
 ## [1.1.6] — 2026-03-02
 
 ### Ajouté
