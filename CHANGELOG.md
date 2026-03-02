@@ -5,6 +5,13 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 
 ---
 
+## [1.1.14] — 2026-03-02
+
+### Corrigé
+- **LocalWebServer.java** : bug critique dans le parsing du protocole Socket.io — `"42[\"join\",...]"` était confondu avec un heartbeat `"2"` après strip du préfixe `"4"`, rendant le `join` invisible pour le serveur APK
+
+---
+
 ## [1.1.13] — 2026-03-02
 
 ### Corrigé

@@ -206,10 +206,11 @@ public class LocalWebServer {
         public void onMessage(WebSocket ws, String text) {
             Log.d(TAG, "WS msg: " + text);
             try {
-                // Socket.io protocol: "42["event",data]"
+                // Socket.io protocol: "42["event",data]" ou heartbeat "2"
                 String payload = text;
-                if (payload.startsWith("4")) payload = payload.substring(1);
-                if (payload.startsWith("2")) { ws.send("3"); return; } // heartbeat
+                if (payload.equals("2") || payload.equals("2probe")) { ws.send("3"); return; } // heartbeat ping
+                if (payload.startsWith("42")) payload = payload.substring(2); // strip "42" prefix
+                else if (payload.startsWith("4")) payload = payload.substring(1); // strip "4" prefix
                 if (!payload.startsWith("[")) return;
 
                 String event = extractArrayString(payload, 0);
