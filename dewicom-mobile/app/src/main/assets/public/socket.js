@@ -218,15 +218,21 @@ async function startSession() {
   if (!window.dewicomServerIP) {
     const hostIP = window.location.hostname;
     const isLAN = hostIP && hostIP !== "127.0.0.1" && hostIP !== "localhost" && /^\d+\.\d+\.\d+\.\d+$/.test(hostIP);
-    if (isLAN) {
-      window.dewicomServerIP = hostIP;
-      window.dewicomServerMode = window.dewicomServerMode || "apk";
-    }
+    if (isLAN) window.dewicomServerIP = hostIP;
   }
-  const serverIP   = window.dewicomServerIP || "127.0.0.1";
-  const serverMode = window.dewicomServerMode || (serverIP === "127.0.0.1" ? "local" : "nodejs");
-  // WS natif uniquement si la page est servie par la WebView interne (127.0.0.1)
-  const useNativeWS = (serverIP === "127.0.0.1" && (serverMode === "apk" || serverMode === "local"));
+  const serverIP = window.dewicomServerIP || "127.0.0.1";
+
+  // Interroge /api/dewicom-discovery pour connaître le mode réel du serveur hôte
+  if (!window.dewicomServerMode) {
+    try {
+      const res = await fetch(`http://${serverIP}:3001/api/dewicom-discovery`, { signal: AbortSignal.timeout(1500) });
+      const data = await res.json();
+      window.dewicomServerMode = data.mode || "apk";
+    } catch { window.dewicomServerMode = "apk"; }
+  }
+  const serverMode = window.dewicomServerMode;
+  // WS natif pour APK (local ou distant) ; Socket.io pour desktop-local et nodejs
+  const useNativeWS = (serverMode === "apk" || serverMode === "local");
 
   if (useNativeWS) {
     socket = makeNativeSocket(serverIP);

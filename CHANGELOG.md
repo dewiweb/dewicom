@@ -5,6 +5,13 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 
 ---
 
+## [1.1.13] — 2026-03-02
+
+### Corrigé
+- **APK socket.js** : navigateur externe → APK utilise désormais WS natif port 3002 (détecté via `/api/dewicom-discovery`) au lieu de Socket.io qui n'est pas supporté par NanoHTTPD
+
+---
+
 ## [1.1.12] — 2026-03-02
 
 ### Corrigé
