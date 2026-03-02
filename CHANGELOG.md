@@ -5,6 +5,17 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 
 ---
 
+## [1.2.4] — 2026-03-02
+
+### Corrigé
+- **Robustesse multi-nœuds (N APK + M Desktop simultanés)** :
+  - **Message `OK` (protocole Bully complet)** : quand un nœud inférieur reçoit `ELECTION` d'un supérieur, il répond `OK` → le supérieur sait qu'il peut annuler sa candidature immédiatement sans attendre le timeout `ELECTION_WAIT` — `LeaderElection.java` + `leader-election.js`
+  - **Anti-storm ELECTION** (`BROADCAST_COOLDOWN = 500ms`) : avec N nœuds qui démarrent simultanément, chacun reçoit N-1 messages `ELECTION` et pourrait re-broadcaster N-1 fois → avalanche quadratique. Le cooldown limite à 1 broadcast par 500ms — `LeaderElection.java` + `leader-election.js`
+  - **Élection avant serveur (Desktop)** : le serveur local ne démarre plus au démarrage de `discoverServer()`, mais uniquement dans `onBecomeLeader()` — évite que plusieurs Desktop aient un serveur actif simultanément pendant l'élection — `main.js`
+  - **Port occupé à la prise de leadership** : retry automatique après 1s si le port 3001 est encore occupé par l'ancien leader — `main.js`
+
+---
+
 ## [1.2.3] — 2026-03-02
 
 ### Corrigé

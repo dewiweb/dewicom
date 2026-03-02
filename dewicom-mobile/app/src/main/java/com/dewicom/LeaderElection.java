@@ -37,6 +37,7 @@ public class LeaderElection {
     private static final int HEARTBEAT_INTERVAL_MS = 2000;
     private static final int LEADER_TIMEOUT_MS      = 6000;
     private static final int ELECTION_WAIT_MS       = 2000; // attente de réponses ELECTION
+    private static final int BROADCAST_COOLDOWN_MS  = 500;  // anti-storm entre deux broadcasts ELECTION
 
     public enum State { FOLLOWER, CANDIDATE, LEADER }
 
@@ -57,6 +58,7 @@ public class LeaderElection {
     private final AtomicLong lastHeartbeat = new AtomicLong(0);
     private final AtomicReference<String> currentLeaderIP = new AtomicReference<>(null);
     private volatile boolean electionPending = false; // debounce : une seule élection à la fois
+    private volatile long lastBroadcastTs    = 0;     // anti-storm : timestamp du dernier ELECTION
 
     private ScheduledExecutorService scheduler;
     private ScheduledFuture<?> heartbeatTask;
@@ -116,13 +118,20 @@ public class LeaderElection {
         electionPending = true;
         state = State.CANDIDATE;
         Log.d(TAG, "Lancement élection (nodeId=" + myNodeId + ")");
-        broadcast("ELECTION:" + myNodeId + ":" + myIP);
+        broadcastElection();
 
         if (electionTask != null) electionTask.cancel(false);
         electionTask = scheduler.schedule(() -> {
             electionPending = false;
             if (state == State.CANDIDATE) becomeLeader();
         }, ELECTION_WAIT_MS, TimeUnit.MILLISECONDS);
+    }
+
+    private void broadcastElection() {
+        long now = System.currentTimeMillis();
+        if (now - lastBroadcastTs < BROADCAST_COOLDOWN_MS) return; // anti-storm
+        lastBroadcastTs = now;
+        broadcast("ELECTION:" + myNodeId + ":" + myIP);
     }
 
     private synchronized void becomeLeader() {
@@ -164,18 +173,36 @@ public class LeaderElection {
         switch (type) {
             case "ELECTION":
                 if (senderId > myNodeId) {
-                    // ID supérieur → annule notre candidature, reset heartbeat pour laisser
-                    // le temps au supérieur de se proclamer avant que le watchdog intervienne
+                    // ID supérieur → annule notre candidature
                     Log.d(TAG, "ELECTION d'un plus grand nodeId (" + senderId + ") — déférence");
                     if (state == State.CANDIDATE) {
                         if (electionTask != null) { electionTask.cancel(false); electionTask = null; }
                         electionPending = false;
                         state = State.FOLLOWER;
                     }
+                    // Reset lastHeartbeat pour laisser le supérieur se proclamer
                     lastHeartbeat.set(System.currentTimeMillis());
-                } else if (senderId < myNodeId && !electionPending) {
-                    // Notre ID est plus grand → on s'annonce si pas déjà candidat
-                    broadcast("ELECTION:" + myNodeId + ":" + myIP);
+                    // Protocole Bully : répondre OK pour signaler qu'on se déférence
+                    broadcast("OK:" + myNodeId + ":" + myIP);
+                } else if (senderId < myNodeId) {
+                    // Notre ID est plus grand → on démarre notre propre élection (anti-storm)
+                    if (!electionPending) {
+                        startElection();
+                    } else {
+                        broadcastElection(); // déjà candidat, re-broadcast avec cooldown
+                    }
+                }
+                // senderId == myNodeId : collision improbable, ignoré
+                break;
+
+            case "OK":
+                // Un nœud supérieur prend le relais — on annule notre candidature
+                if (state == State.CANDIDATE && senderId > myNodeId) {
+                    Log.d(TAG, "OK reçu du nœud supérieur (" + senderId + ") — annulation candidature");
+                    if (electionTask != null) { electionTask.cancel(false); electionTask = null; }
+                    electionPending = false;
+                    state = State.FOLLOWER;
+                    lastHeartbeat.set(System.currentTimeMillis());
                 }
                 break;
 

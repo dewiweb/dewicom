@@ -224,38 +224,39 @@ async function scanSubnet(port) {
 
 // ── Découverte via élection de leader ─────────────────────────────────────────
 async function discoverServer() {
-  sendToWindow("discovery-status", "Démarrage serveur local...");
+  sendToWindow("discovery-status", "Élection du serveur en cours...");
 
-  // Démarre toujours le serveur local (le leader prend le relais via l'élection)
-  try {
-    const loc = await localServer.start();
-    localServerRunning = true;
-    console.log(`[discovery] Serveur local démarré: ${loc.url} (réseau: ${loc.ip}:${loc.port})`);
-    sendToWindow("discovery-status", `Serveur local démarré — ${loc.ip}:${loc.port}`);
-  } catch (e) {
-    console.error("[discovery] Impossible de démarrer le serveur local:", e.message);
-    sendToWindow("discovery-status", "Erreur serveur local: " + e.message);
-    return null;
-  }
-
-  // Lance l'élection — résolu asynchroniquement via les callbacks
+  // Élection d'abord — le serveur ne démarre QUE si on gagne
   let resolved = false;
   return new Promise((resolve) => {
     leaderElection = new LeaderElection({
-      onBecomeLeader: (myIP) => {
-        console.log(`[election] LEADER élu: ${myIP} — serveur local actif`);
-        sendToWindow("discovery-status", `Leader — serveur actif sur ${myIP}:3001`);
+      onBecomeLeader: async (myIP) => {
+        console.log(`[election] LEADER élu: ${myIP} — démarrage serveur local`);
+        sendToWindow("discovery-status", `Leader élu — démarrage serveur...`);
+        // Démarre le serveur uniquement quand on est sûr d'être leader
+        if (!localServerRunning) {
+          try {
+            const loc = await localServer.start();
+            localServerRunning = true;
+            console.log(`[discovery] Serveur démarré: ${loc.url} (réseau: ${loc.ip}:${loc.port})`);
+            sendToWindow("discovery-status", `Leader — serveur actif sur ${myIP}:3001`);
+          } catch (e) {
+            console.error("[discovery] Impossible de démarrer le serveur:", e.message);
+            // Port occupé ? L'autre nœud est peut-être encore leader — on réessaie dans 1s
+            await new Promise(r => setTimeout(r, 1000));
+            try { await localServer.start(); localServerRunning = true; } catch (e2) {
+              console.error("[discovery] Échec définitif serveur:", e2.message);
+            }
+          }
+        }
         const localServer_ = { ip: "127.0.0.1", port: 3001, protocol: "http" };
         if (!resolved) {
           resolved = true;
           resolve(localServer_);
         } else {
-          // Ré-élection : le desktop reprend le leadership après avoir été follower
+          // Ré-élection : reprend le leadership après avoir été follower
           console.log(`[election] RE-LEADER: rechargement WebView sur 127.0.0.1:3001`);
           discoveredServer = localServer_;
-          if (!localServerRunning) {
-            localServer.start().then(() => { localServerRunning = true; }).catch(() => {});
-          }
           setupMediaPermissions("http://127.0.0.1:3001");
           if (mainWindow && !mainWindow.isDestroyed()) mainWindow.loadURL("http://127.0.0.1:3001");
         }
@@ -263,23 +264,25 @@ async function discoverServer() {
       onLeaderElected: async (leaderIP) => {
         console.log(`[election] FOLLOWER — leader: ${leaderIP}`);
         sendToWindow("discovery-status", `Follower — leader: ${leaderIP}:3001`);
-        // Détecte le protocole réel du leader (HTTP local ou HTTPS standalone)
+        // Si on avait démarré un serveur (ré-élection), on l'arrête proprement
+        if (localServerRunning) {
+          const detected = await checkServer(leaderIP, 3001);
+          const protocol = detected?.protocol || "http";
+          const url = `${protocol}://${leaderIP}:3001`;
+          localServer.notifyRedirect(url);
+          await new Promise(r => setTimeout(r, 300));
+          localServer.stop();
+          localServerRunning = false;
+        }
         const detected = await checkServer(leaderIP, 3001);
         const protocol = detected?.protocol || "http";
         const url = `${protocol}://${leaderIP}:3001`;
         const newServer = { ip: leaderIP, port: 3001, protocol };
-        // Notifie les clients navigateur connectés au serveur local avant de l'arrêter
-        localServer.notifyRedirect(url);
-        await new Promise(r => setTimeout(r, 300)); // laisse le temps au message de partir
-        localServer.stop();
-        localServerRunning = false;
         if (!resolved) {
-          // Premier chargement — loadURL classique
           resolved = true;
           if (mainWindow && !mainWindow.isDestroyed()) mainWindow.loadURL(url);
           resolve(newServer);
         } else {
-          // Ré-élection : basculement vers un nouveau leader
           discoveredServer = newServer;
           setupMediaPermissions(url);
           sendToWindow("server-changed", url);

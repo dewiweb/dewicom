@@ -13,7 +13,8 @@ const MCAST_ADDR         = "224.0.0.251";
 const ELECT_PORT         = 9998;
 const HEARTBEAT_INTERVAL = 2000;
 const LEADER_TIMEOUT     = 6000;
-const ELECTION_WAIT      = 2000;
+const ELECTION_WAIT      = 2000;  // attente avant de se proclamer leader
+const BROADCAST_COOLDOWN = 500;   // anti-storm : cooldown entre deux broadcasts ELECTION
 
 function getForcedInterface() {
   try {
@@ -74,6 +75,7 @@ class LeaderElection {
     this._watchdogTimer   = null;
     this._electionTimer   = null;
     this._electionPending = false; // debounce : une seule élection à la fois
+    this._lastBroadcastTs = 0;     // anti-storm : timestamp du dernier broadcast ELECTION
 
     console.log(`[election] Init — IP: ${this.myIP}, nodeId: ${this.myNodeId}`);
   }
@@ -134,17 +136,24 @@ class LeaderElection {
 
   _startElection() {
     if (!this.running) return;
-    if (this._electionPending) return; // debounce : déjà une élection en cours
+    if (this._electionPending) return; // debounce : une seule élection à la fois
     this._electionPending = true;
     this.state = "CANDIDATE";
     console.log(`[election] Lancement (nodeId=${this.myNodeId})`);
-    this._broadcast(`ELECTION:${this.myNodeId}:${this.myIP}`);
+    this._broadcastElection();
 
     clearTimeout(this._electionTimer);
     this._electionTimer = setTimeout(() => {
       this._electionPending = false;
       if (this.state === "CANDIDATE") this._becomeLeader();
     }, ELECTION_WAIT);
+  }
+
+  _broadcastElection() {
+    const now = Date.now();
+    if (now - this._lastBroadcastTs < BROADCAST_COOLDOWN) return; // anti-storm
+    this._lastBroadcastTs = now;
+    this._broadcast(`ELECTION:${this.myNodeId}:${this.myIP}`);
   }
 
   _becomeLeader() {
@@ -184,20 +193,35 @@ class LeaderElection {
     switch (type) {
       case "ELECTION":
         if (senderId > this.myNodeId) {
-          // L'autre a un plus grand ID → on annule notre candidature et on reset le watchdog
-          // pour lui laisser le temps de se proclamer avant qu'on re-déclenche une élection
+          // ID supérieur reçu → on annule notre candidature
           if (this.state === "CANDIDATE") {
             clearTimeout(this._electionTimer);
             this._electionPending = false;
             this.state = "FOLLOWER";
           }
-          // Reset le lastHeartbeat pour ne pas déclencher le watchdog trop tôt
+          // Reset lastHeartbeat pour laisser le temps au supérieur de se proclamer
           this.lastHeartbeat = Date.now();
+          // Protocole Bully : répondre OK pour signaler qu'on se déférence
+          this._broadcast(`OK:${this.myNodeId}:${this.myIP}`);
         } else if (senderId < this.myNodeId) {
-          // Notre ID est plus grand → on s'annonce ELECTION si pas déjà candidat
+          // Notre ID est plus grand → on démarre notre propre élection (avec cooldown)
+          // Ne pas juste re-broadcaster ELECTION : ça crée des storms avec N nœuds
           if (!this._electionPending) {
-            this._broadcast(`ELECTION:${this.myNodeId}:${this.myIP}`);
+            this._startElection();
+          } else {
+            this._broadcastElection(); // on est déjà candidat, on re-broadcast avec cooldown
           }
+        }
+        // Si senderId === myNodeId : collision d'IP improbable, on ignore
+        break;
+
+      case "OK":
+        // Un nœud supérieur a pris le relais — on annule notre candidature
+        if (this.state === "CANDIDATE" && senderId > this.myNodeId) {
+          clearTimeout(this._electionTimer);
+          this._electionPending = false;
+          this.state = "FOLLOWER";
+          this.lastHeartbeat = Date.now();
         }
         break;
 
