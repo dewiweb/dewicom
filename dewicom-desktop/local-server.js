@@ -208,7 +208,10 @@ function start() {
       socket.on("audio-chunk", (payload) => {
         const user = users.get(socket.id);
         if (!user) return;
-        const talkChs = user.talkChannels?.length ? user.talkChannels : [payload.channel || user.channel];
+        // payload.talkChannels prioritaire (envoyé par le client director en une seule émission)
+        const talkChs = payload.talkChannels?.length ? payload.talkChannels
+                      : user.talkChannels?.length    ? user.talkChannels
+                      : [payload.channel || user.channel];
         let chunk = payload.chunk;
         if (chunk && Buffer.isBuffer(chunk)) {
           chunk = chunk.buffer.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength);

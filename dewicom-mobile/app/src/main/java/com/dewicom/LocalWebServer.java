@@ -351,8 +351,16 @@ public class LocalWebServer {
                     case "audio-chunk": {
                         UserInfo user = socketUser.get(ws);
                         if (user == null) return;
-                        // Director mode : déduplique les destinataires sur tous les talkChannels
-                        Set<String> talkChs = user.talkChannels.isEmpty() ? new HashSet<>(java.util.Collections.singleton(user.channel)) : user.talkChannels;
+                        // payload.talkChannels prioritaire (envoyé par le client director en une seule émission)
+                        Set<String> talkChs = new HashSet<>();
+                        String talkRawPayload = extractJsonArray(payload, "talkChannels");
+                        if (talkRawPayload != null) {
+                            for (String t : talkRawPayload.split(",")) {
+                                t = t.trim().replace("\"", "").replace("[", "").replace("]", "");
+                                if (!t.isEmpty()) talkChs.add(t);
+                            }
+                        }
+                        if (talkChs.isEmpty()) talkChs = user.talkChannels.isEmpty() ? new HashSet<>(java.util.Collections.singleton(user.channel)) : user.talkChannels;
                         Set<WebSocket> seen = new HashSet<>();
                         for (String tch : talkChs) {
                             Set<WebSocket> sockets = channelSockets.get(tch);

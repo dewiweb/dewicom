@@ -201,7 +201,10 @@ io.on("connection", (socket) => {
   socket.on("audio-chunk", (payload) => {
     const user = users.get(socket.id);
     if (!user) return;
-    const talkChannels = user.talkChannels?.length ? user.talkChannels : [payload.channel || user.channel];
+    // payload.talkChannels prioritaire (envoyé par le client director en une seule émission)
+    const talkChannels = payload.talkChannels?.length ? payload.talkChannels
+                       : user.talkChannels?.length    ? user.talkChannels
+                       : [payload.channel || user.channel];
     const chunk = payload.chunk;
     // Déduplique les destinataires pour éviter envois multiples en director mode
     const seen = new Set();

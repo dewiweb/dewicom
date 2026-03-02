@@ -5,6 +5,15 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 
 ---
 
+## [1.1.20] — 2026-03-02
+
+### Corrigé
+- **Director mode audio (root cause)** : le client émettait N fois le même chunk (une par `talkChannel`) — corrigé en émettant une seule fois avec `talkChannels` dans le payload, le serveur gérant la distribution déduplicée
+- **`audio.js`** : `socket.emit("audio-chunk", { talkChannels, ... })` — émission unique au lieu de N émissions en boucle
+- **`local-server.js`, `server/index.js`, `LocalWebServer.java`** : utilise `payload.talkChannels` si présent (priorité sur `user.talkChannels`)
+
+---
+
 ## [1.1.19] — 2026-03-02
 
 ### Corrigé

@@ -15,9 +15,8 @@ function setupAudioProcessor() {
     if (directorMode) {
       const activeTalkChannels = getAllTalkChannels();
       if (activeTalkChannels.length > 0) {
-        activeTalkChannels.forEach(channelId => {
-          socket.emit("audio-chunk", { channel: channelId, chunk: int16.buffer }, { binary: true });
-        });
+        // Émet une seule fois — le serveur se charge de la distribution multi-canal
+        socket.emit("audio-chunk", { channel: activeTalkChannels[0], talkChannels: activeTalkChannels, chunk: int16.buffer }, { binary: true });
       }
     } else {
       socket.emit("audio-chunk", { channel: myChannel, chunk: int16.buffer }, { binary: true });
