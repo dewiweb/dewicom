@@ -53,11 +53,13 @@
     "win": {
       "target": [
         "nsis"
-      ]
+      ],
+      "artifactName": "DewiCom-Setup-${version}.exe"
     },
     "nsis": {
       "include": "build/installer.nsh",
-      "perMachine": true
+      "perMachine": true,
+      "oneClick": false
     }
   },
   "devDependencies": {
