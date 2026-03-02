@@ -5,6 +5,14 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 
 ---
 
+## [1.1.21] — 2026-03-02
+
+### Corrigé
+- **`call-ring` director mode** : la sonnerie n'était émise que sur `myChannel` — désormais émise sur tous les `talkChannels` actifs de l'émetteur (`ui.js`, `local-server.js`, `server/index.js`, `LocalWebServer.java`)
+- Les destinataires sont dédupliqués : un utilisateur en écoute sur plusieurs canaux ciblés ne reçoit la sonnerie qu'une seule fois
+
+---
+
 ## [1.1.20] — 2026-03-02
 
 ### Corrigé

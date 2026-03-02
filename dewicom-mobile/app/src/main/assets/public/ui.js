@@ -207,9 +207,16 @@ function setupCall() {
   const btn = document.getElementById("callBtn");
   btn.addEventListener("click", () => {
     if (!socket) return;
-    socket.emit("call-ring", { channel: myChannel });
+    if (directorMode) {
+      const talkChs = getAllTalkChannels();
+      const targets = talkChs.length ? talkChs : [myChannel];
+      socket.emit("call-ring", { channel: targets[0], talkChannels: targets });
+      addActivityEntry(`Tu as appelé ${targets.map(getChannelName).join(", ")}`, "📞", "#f59e0b");
+    } else {
+      socket.emit("call-ring", { channel: myChannel });
+      addActivityEntry(`Tu as appelé ${getChannelName(myChannel)}`, "📞", "#f59e0b");
+    }
     btn.classList.add("calling");
-    addActivityEntry(`Tu as appelé ${getChannelName(myChannel)}`, "📞", "#f59e0b");
     setTimeout(() => btn.classList.remove("calling"), 2000);
   });
 }

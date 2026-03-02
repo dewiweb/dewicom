@@ -374,17 +374,32 @@ public class LocalWebServer {
                     case "call-ring": {
                         UserInfo user = socketUser.get(ws);
                         if (user == null) return;
-                        String ringCh = extractJson(payload, "channel");
-                        if (ringCh == null) ringCh = user.channel;
-                        // Notifie les membres du canal + ceux qui l'écoutent (director mode)
+                        // Director mode : talkChannels du payload prioritaire, sinon canal unique
+                        Set<String> ringChs = new HashSet<>();
+                        String talkRawRing = extractJsonArray(payload, "talkChannels");
+                        if (talkRawRing != null) {
+                            for (String t : talkRawRing.split(",")) {
+                                t = t.trim().replace("\"", "").replace("[", "").replace("]", "");
+                                if (!t.isEmpty()) ringChs.add(t);
+                            }
+                        }
+                        if (ringChs.isEmpty()) {
+                            String singleCh = extractJson(payload, "channel");
+                            ringChs.add(singleCh != null ? singleCh : user.channel);
+                        }
+                        String firstCh = ringChs.iterator().next();
+                        // Notifie les membres des canaux + ceux qui les écoutent — déduplication
                         Set<WebSocket> targets = new HashSet<>();
                         for (Map.Entry<WebSocket, UserInfo> e : socketUser.entrySet()) {
                             if (e.getKey() == ws) continue;
                             UserInfo u = e.getValue();
-                            if (u.channel.equals(ringCh) || u.listenChannels.contains(ringCh))
-                                targets.add(e.getKey());
+                            for (String rch : ringChs) {
+                                if (u.channel.equals(rch) || u.listenChannels.contains(rch)) {
+                                    targets.add(e.getKey()); break;
+                                }
+                            }
                         }
-                        String ringMsg = "42[\"call-ring\",{\"from\":\"" + user.name + "\",\"channel\":\"" + ringCh + "\"}]";
+                        String ringMsg = "42[\"call-ring\",{\"from\":\"" + user.name + "\",\"channel\":\"" + firstCh + "\"}]";
                         for (WebSocket t : targets) { if (t.isOpen()) t.send(ringMsg); }
                         break;
                     }

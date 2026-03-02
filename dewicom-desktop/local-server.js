@@ -245,19 +245,22 @@ function start() {
         if (user) user.talkChannels = talkChannels;
       });
 
-      socket.on("call-ring", ({ channel }) => {
+      socket.on("call-ring", ({ channel, talkChannels }) => {
         const user = users.get(socket.id);
         if (!user) return;
-        // Envoie au canal de l'appelant + tous les clients qui écoutent ce canal (listenChannels)
+        // Director mode : talkChannels du payload prioritaire, sinon canal unique
+        const ringChannels = talkChannels?.length ? talkChannels : [channel || user.channel];
         const targets = new Set();
         for (const [sid, u] of users) {
           if (sid === socket.id) continue;
           const listens = u.listenChannels || [];
-          if (u.channel === channel || listens.includes(channel)) targets.add(sid);
+          for (const ch of ringChannels) {
+            if (u.channel === ch || listens.includes(ch)) { targets.add(sid); break; }
+          }
         }
         targets.forEach(sid => {
           const s = io.sockets.sockets.get(sid);
-          if (s) s.emit("call-ring", { from: user.name, fromId: socket.id, channel });
+          if (s) s.emit("call-ring", { from: user.name, fromId: socket.id, channel: ringChannels[0] });
         });
       });
 
