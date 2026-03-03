@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, session, Menu } = require("electron");
+const { app, BrowserWindow, ipcMain, session, Menu, powerSaveBlocker } = require("electron");
 const dgram = require("dgram");
 const path = require("path");
 const os = require("os");
@@ -17,6 +17,7 @@ let rediscoveryTimer = null;
 let leaderElection = null;
 let serverWatchdogTimer = null;  // surveille la connexion au serveur externe (docker/dedicated)
 let serverWatchdogFailures = 0;
+let powerBlockerId = null;       // identifiant powerSaveBlocker (inhibition veille mode --server)
 
 const SERVER_WATCHDOG_INTERVAL_MS = 2000;  // poll toutes les 2s
 const SERVER_WATCHDOG_MAX_FAILURES = 3;    // 3 échecs consécutifs → failover (~6s, évite faux positifs WiFi)
@@ -528,11 +529,72 @@ app.on("certificate-error", (event, webContents, url, error, certificate, callba
 });
 
 app.whenReady().then(async () => {
-  const { session: ses } = require("electron");
+  const { session: ses, powerMonitor } = require("electron");
 
   // Bypass SSL pour certs auto-signés et mkcert
   ses.defaultSession.setCertificateVerifyProc((request, callback) => {
     callback(0);
+  });
+
+  // ── Gestion veille système ──────────────────────────────────────────────
+  // En mode --server : inhiber la mise en veille (le serveur doit rester actif)
+  if (SERVER_MODE || HEADLESS_MODE) {
+    powerBlockerId = powerSaveBlocker.start("prevent-app-suspension");
+    console.log("[power] Inhibition veille activée (mode serveur) — powerSaveBlocker id:", powerBlockerId);
+  }
+
+  // Détection réveil de veille : pause puis reprise propre des timers critiques
+  powerMonitor.on("suspend", () => {
+    console.log("[power] Mise en veille détectée — pause des timers élection/watchdog");
+    // Pause watchdog (évite accumulation de faux échecs pendant la veille)
+    stopServerWatchdog();
+    // Pause élection Bully (évite re-élection fantôme au réveil)
+    if (leaderElection) leaderElection.pauseTimers?.();
+  });
+
+  powerMonitor.on("resume", () => {
+    console.log("[power] Réveil de veille — redémarrage découverte et timers");
+    sendToWindow("discovery-status", "Réveil — vérification serveur...");
+
+    // Délai court pour laisser le réseau se rétablir après réveil WiFi
+    setTimeout(async () => {
+      if (localServerRunning) {
+        // On est serveur : reprendre les annonces multicast et le heartbeat
+        console.log("[power] Mode serveur — reprise normale");
+        if (leaderElection) leaderElection.resumeTimers?.();
+        return;
+      }
+
+      // On est client : vérifier que le serveur est toujours là
+      if (discoveredServer) {
+        const { ip, port, protocol } = discoveredServer;
+        const alive = ip === "127.0.0.1" || await checkServer(ip, port);
+        if (alive) {
+          console.log("[power] Serveur toujours actif après réveil");
+          // Relancer le watchdog
+          if (ip !== "127.0.0.1" && ip !== "localhost") {
+            startServerWatchdog(ip, port, protocol);
+          }
+          // Notifier la WebView pour qu'elle relance sa connexion Socket.io
+          sendToWindow("server-resumed", `${protocol}://${ip}:${port}`);
+          return;
+        }
+      }
+
+      // Serveur perdu ou pas encore trouvé → re-découverte complète
+      console.log("[power] Serveur inaccessible après réveil — re-découverte");
+      if (leaderElection) { leaderElection.stop(); leaderElection = null; }
+      discoveredServer = SERVER_MODE ? await startDedicatedServer() : await discoverServer();
+      if (discoveredServer) {
+        const { ip, port, protocol } = discoveredServer;
+        const url = `${protocol}://${ip}:${port}`;
+        setupMediaPermissions(url);
+        sendToWindow("server-changed", url);
+        if (!localServerRunning && ip !== "127.0.0.1") {
+          startServerWatchdog(ip, port, protocol);
+        }
+      }
+    }, 2000); // 2s pour laisser WiFi se reconnecter
   });
 
   if (HEADLESS_MODE) {

@@ -96,6 +96,27 @@ class LeaderElection {
     try { this._socket?.close(); } catch (e) {}
   }
 
+  // Pause propre avant veille : arrête les timers sans fermer le socket
+  pauseTimers() {
+    clearInterval(this._heartbeatTimer);  this._heartbeatTimer = null;
+    clearInterval(this._watchdogTimer);   this._watchdogTimer  = null;
+    clearTimeout(this._electionTimer);    this._electionTimer  = null;
+    this._electionPending = false;
+    console.log("[election] Timers suspendus (veille système)");
+  }
+
+  // Reprise après réveil : repart proprement selon l'état courant
+  resumeTimers() {
+    if (!this.running) return;
+    this.lastHeartbeat = Date.now(); // évite un faux timeout immédiat
+    if (this.state === "LEADER") {
+      this._becomeLeader(); // reprend heartbeat
+    } else {
+      this._startWatchdog(); // reprend watchdog follower
+    }
+    console.log("[election] Timers repris après réveil (état: " + this.state + ")");
+  }
+
   isLeader()   { return this.state === "LEADER"; }
   getLeaderIP(){ return this.leaderIP; }
 
