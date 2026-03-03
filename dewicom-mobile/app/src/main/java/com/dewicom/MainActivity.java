@@ -14,14 +14,23 @@ import android.net.http.SslCertificate;
 import android.net.http.SslError;
 import android.webkit.JavascriptInterface;
 import android.Manifest;
+import android.app.AlertDialog;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
+import android.net.wifi.WifiInfo;
+import android.net.wifi.WifiManager;
 import android.util.Log;
+import android.view.View;
+import android.widget.ArrayAdapter;
+import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -48,7 +57,11 @@ public class MainActivity extends Activity {
     private volatile String foundServerMode = "local";
     private LeaderElection leaderElection;
     private BroadcastReceiver networkReceiver = null;
-    private volatile boolean wasConnected = true; // état réseau précédent
+    private String chosenSsid = null;           // SSID WiFi choisi par l'utilisateur
+    private volatile boolean onChosenWifi = false; // vrai si le WiFi actuel = chosenSsid
+    private View waitingView = null;            // vue d'attente affichée quand WiFi wrong
+    private static final String PREFS_NAME = "dewicom_prefs";
+    private static final String PREF_SSID  = "chosen_ssid";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -142,9 +155,8 @@ public class MainActivity extends Activity {
             }
         });
         
-        // Démarre l'élection de leader
-        startLeaderElection();
-        registerNetworkReceiver();
+        // Sélection du WiFi dédié puis démarrage
+        initWifiSelection();
     }
 
     // Interface Java exposée au JavaScript
@@ -387,55 +399,189 @@ public class MainActivity extends Activity {
         startSuperiorServerListener();
     }
 
-    private void registerNetworkReceiver() {
+    // ── Sélection WiFi dédié ─────────────────────────────────────────────────────
+
+    private String getCurrentSsid() {
+        WifiManager wm = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+        if (wm == null || !wm.isWifiEnabled()) return null;
+        WifiInfo info = wm.getConnectionInfo();
+        if (info == null) return null;
+        String ssid = info.getSSID();
+        if (ssid == null || ssid.equals("<unknown ssid>")) return null;
+        // Android entoure le SSID de guillemets
+        return ssid.startsWith("\"") ? ssid.substring(1, ssid.length() - 1) : ssid;
+    }
+
+    private java.util.List<String> getAvailableSsids() {
+        WifiManager wm = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+        java.util.List<String> ssids = new java.util.ArrayList<>();
+        String current = getCurrentSsid();
+        if (current != null) ssids.add(current); // WiFi actif en premier
+        if (wm != null) {
+            java.util.List<android.net.wifi.ScanResult> results = wm.getScanResults();
+            if (results != null) {
+                for (android.net.wifi.ScanResult r : results) {
+                    if (r.SSID != null && !r.SSID.isEmpty() && !ssids.contains(r.SSID)) {
+                        ssids.add(r.SSID);
+                    }
+                }
+            }
+        }
+        return ssids;
+    }
+
+    private void initWifiSelection() {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        String saved = prefs.getString(PREF_SSID, null);
+        String current = getCurrentSsid();
+
+        if (saved != null) {
+            // SSID déjà choisi : vérifie si on est dessus
+            chosenSsid = saved;
+            Log.d("MainActivity", "[wifi] SSID enregistré: " + chosenSsid + ", actuel: " + current);
+            if (chosenSsid.equals(current)) {
+                onChosenWifi = true;
+                startLeaderElection();
+            } else {
+                onChosenWifi = false;
+                showWaitingForWifi();
+            }
+            registerWifiReceiver();
+        } else {
+            // Première fois : dialogue de sélection
+            showWifiSelectionDialog(current);
+        }
+    }
+
+    private void showWifiSelectionDialog(String currentSsid) {
+        java.util.List<String> ssids = getAvailableSsids();
+        if (ssids.isEmpty() && currentSsid != null) ssids.add(currentSsid);
+
+        String[] items;
+        if (ssids.isEmpty()) {
+            // Pas de WiFi disponible : utiliser le WiFi actuel ou passer
+            items = new String[]{"Continuer sans WiFi dédié"};
+        } else {
+            items = ssids.toArray(new String[0]);
+        }
+
+        new AlertDialog.Builder(this)
+            .setTitle("Choisir le réseau WiFi DewiCom")
+            .setMessage("Sélectionnez le WiFi sur lequel le serveur DewiCom est accessible.\nL'app se déconnectera si vous changez de réseau.")
+            .setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, items), (dialog, which) -> {
+                String chosen = items[which];
+                if (chosen.equals("Continuer sans WiFi dédié")) {
+                    // Mode sans contrainte WiFi
+                    chosenSsid = null;
+                    onChosenWifi = true;
+                    startLeaderElection();
+                } else {
+                    chosenSsid = chosen;
+                    getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                        .edit().putString(PREF_SSID, chosenSsid).apply();
+                    Log.d("MainActivity", "[wifi] SSID choisi: " + chosenSsid);
+                    String current = getCurrentSsid();
+                    if (chosenSsid.equals(current)) {
+                        onChosenWifi = true;
+                        startLeaderElection();
+                    } else {
+                        onChosenWifi = false;
+                        showWaitingForWifi();
+                    }
+                    registerWifiReceiver();
+                }
+            })
+            .setNeutralButton("Changer de réseau", (dialog, w) -> {
+                // Efface le choix mémorisé et réaffiche le dialogue
+                getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                    .edit().remove(PREF_SSID).apply();
+                chosenSsid = null;
+                showWifiSelectionDialog(getCurrentSsid());
+            })
+            .setCancelable(false)
+            .show();
+    }
+
+    private void showWaitingForWifi() {
+        webView.setVisibility(View.GONE);
+        if (waitingView != null) return;
+        LinearLayout ll = new LinearLayout(this);
+        ll.setOrientation(LinearLayout.VERTICAL);
+        ll.setGravity(android.view.Gravity.CENTER);
+        ll.setBackgroundColor(0xFF1a1a2e);
+        ll.setLayoutParams(new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT));
+
+        TextView tv = new TextView(this);
+        tv.setText("En attente du WiFi\n\u00ab " + (chosenSsid != null ? chosenSsid : "?") + " \u00bb");
+        tv.setTextColor(0xFFFFFFFF);
+        tv.setTextSize(18);
+        tv.setGravity(android.view.Gravity.CENTER);
+        tv.setPadding(32, 0, 32, 32);
+        ll.addView(tv);
+
+        Button btn = new Button(this);
+        btn.setText("Changer de réseau");
+        btn.setOnClickListener(v -> {
+            getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit().remove(PREF_SSID).apply();
+            chosenSsid = null;
+            hideWaitingView();
+            showWifiSelectionDialog(getCurrentSsid());
+        });
+        ll.addView(btn);
+
+        waitingView = ll;
+        ((android.view.ViewGroup) webView.getParent()).addView(ll);
+        Log.d("MainActivity", "[wifi] Affichage écran attente WiFi: " + chosenSsid);
+    }
+
+    private void hideWaitingView() {
+        if (waitingView != null) {
+            ((android.view.ViewGroup) waitingView.getParent()).removeView(waitingView);
+            waitingView = null;
+        }
+        webView.setVisibility(View.VISIBLE);
+    }
+
+    private void registerWifiReceiver() {
         if (networkReceiver != null) return;
         networkReceiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
-                ConnectivityManager cm = (ConnectivityManager)
-                    getSystemService(Context.CONNECTIVITY_SERVICE);
-                NetworkInfo info = cm.getActiveNetworkInfo();
-                boolean connected = info != null && info.isConnected();
-                if (connected && !wasConnected) {
-                    Log.d("MainActivity", "[network] Reconnexion réseau — re-découverte serveur");
-                    wasConnected = true;
-                    // Délai court pour laisser le WiFi s'établir
+                String action = intent.getAction();
+                if (!WifiManager.NETWORK_STATE_CHANGED_ACTION.equals(action) &&
+                    !WifiManager.WIFI_STATE_CHANGED_ACTION.equals(action)) return;
+
+                String currentSsid = getCurrentSsid();
+                boolean isOnChosen = chosenSsid == null || chosenSsid.equals(currentSsid);
+
+                if (isOnChosen && !onChosenWifi) {
+                    // Retour sur le WiFi choisi
+                    Log.d("MainActivity", "[wifi] Retour sur WiFi choisi: " + currentSsid + " — re-découverte");
+                    onChosenWifi = true;
+                    runOnUiThread(() -> hideWaitingView());
+                    stopSession(); // arrête session sans désenregistrer le wifi receiver
+                    executor = Executors.newCachedThreadPool();
                     executor.execute(() -> {
-                        try { Thread.sleep(2000); } catch (InterruptedException ignored) {}
-                        // Si on est en local et qu'un serveur dédié est maintenant accessible
-                        if ("127.0.0.1".equals(foundServerIP) || pendingRemoteIP == null) {
-                            String dedicatedIP = MulticastDiscovery.listenForDedicated(MainActivity.this);
-                            if (dedicatedIP != null) {
-                                Log.d("MainActivity", "[network] Serveur dédié retrouvé après reconnexion: " + dedicatedIP);
-                                String mode = NetworkDiscovery.getServerMode(dedicatedIP, 3001);
-                                if ("unknown".equals(mode)) mode = "dedicated";
-                                foundServerIP = dedicatedIP;
-                                foundServerMode = mode;
-                                pendingRemoteIP = dedicatedIP;
-                                final String ip = dedicatedIP; final String m = mode;
-                                runOnUiThread(() -> {
-                                    webView.evaluateJavascript(
-                                        "window.dewicomServerIP='" + ip + "';" +
-                                        "window.dewicomServerMode='" + m + "';" +
-                                        "if(typeof reconnectSocket==='function') reconnectSocket('" + ip + "','" + m + "');", null);
-                                    webView.loadUrl("http://" + ip + ":3001");
-                                });
-                                // Arrête le serveur local s'il tourne
-                                if (localWebServer != null) { localWebServer.stop(); localWebServer = null; }
-                                if (leaderElection != null) { leaderElection.stop(); leaderElection = null; }
-                                stopSuperiorServerListener();
-                                startDedicatedServerWatchdog(ip);
-                            }
-                        }
+                        try { Thread.sleep(2500); } catch (InterruptedException ignored) {}
+                        runOnUiThread(() -> startLeaderElection());
                     });
-                } else if (!connected) {
-                    wasConnected = false;
+                } else if (!isOnChosen && onChosenWifi) {
+                    // Bascule sur un autre WiFi
+                    Log.d("MainActivity", "[wifi] Changement WiFi: " + currentSsid + " ≠ " + chosenSsid + " — pause");
+                    onChosenWifi = false;
+                    stopSession();
+                    executor = Executors.newCachedThreadPool();
+                    runOnUiThread(() -> showWaitingForWifi());
                 }
             }
         };
-        IntentFilter filter = new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION);
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(WifiManager.NETWORK_STATE_CHANGED_ACTION);
+        filter.addAction(WifiManager.WIFI_STATE_CHANGED_ACTION);
         registerReceiver(networkReceiver, filter);
-        Log.d("MainActivity", "[network] BroadcastReceiver connectivité enregistré");
+        Log.d("MainActivity", "[wifi] BroadcastReceiver WiFi enregistré (SSID suivi: " + chosenSsid + ")");
     }
 
     private Thread superiorServerThread = null;
@@ -539,13 +685,20 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void stopAll() {
+    // Arrête la session (serveur, élection, watchdog) sans toucher au wifi receiver
+    private void stopSession() {
         if (leaderElection != null) { leaderElection.stop(); leaderElection = null; }
         if (localWebServer != null) { localWebServer.stop(); localWebServer = null; }
         if (watchdogScheduler != null) { watchdogScheduler.shutdownNow(); watchdogScheduler = null; }
         stopSuperiorServerListener();
-        if (networkReceiver != null) { try { unregisterReceiver(networkReceiver); } catch (Exception ignored) {} networkReceiver = null; }
         if (executor != null && !executor.isShutdown()) executor.shutdownNow();
+        foundServerIP = null; pendingRemoteIP = null; scanComplete = false;
+    }
+
+    // Arrêt complet (onDestroy) — désenregistre aussi le wifi receiver
+    private void stopAll() {
+        stopSession();
+        if (networkReceiver != null) { try { unregisterReceiver(networkReceiver); } catch (Exception ignored) {} networkReceiver = null; }
     }
 
     @Override
