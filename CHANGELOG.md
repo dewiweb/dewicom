@@ -5,6 +5,25 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 
 ---
 
+## [1.3.1] — 2026-03-03
+
+### Ajouté
+- **Mode `--server` Desktop (Niveau 2)** : le Desktop peut démarrer directement en mode serveur dédié sans passer par l'élection Bully — `main.js`
+  - `--server` : démarre le serveur local immédiatement, annonce `mode=dedicated` en multicast
+  - `--server --headless` : mode daemon sans fenêtre (idéal pour PC dédié en régie ou RPi avec Electron)
+  - `local-server.js` : paramètre `options.mode` pour configurer le mode annoncé aux clients
+
+- **Hiérarchie de découverte multicast** (Niveau 1 > Niveau 2 > Niveau 3) — `main.js`
+  - `docker` (priorité 3) et `dedicated` (priorité 2) → résolution immédiate, bypass élection
+  - `desktop-local` (priorité 1) → résolution normale après timeout
+  - Si un serveur `docker`/`dedicated` est détecté pendant l'écoute, connexion immédiate sans attendre la fin du timeout
+
+- **Auto-rejoin sans formulaire** — `shared/public/app.js`
+  - Si `name` + `channel` sont en `localStorage`, `startSession()` s'exécute automatiquement au chargement de la page (300ms de délai pour stabilisation DOM)
+  - L'utilisateur ne voit plus jamais le formulaire après la première connexion — reconnexion transparente après coupure, redémarrage serveur, ou re-élection
+
+---
+
 ## [1.3.0] — 2026-03-03
 
 ### Ajouté

@@ -73,12 +73,13 @@ function getLocalIP() {
   return candidates[0].address;
 }
 
-function startAnnouncing(ip, port) {
+function startAnnouncing(ip, port, mode = "desktop-local") {
   try {
     announceSocket = dgram.createSocket({ type: "udp4" });
     const payload = Buffer.from(JSON.stringify({
-      service: "DewiCom", version: "1.0.0",
+      service: "DewiCom", version: APP_VERSION,
       ip, port, protocol: "http",
+      mode,
     }));
     const send = () => {
       announceSocket.send(payload, 0, payload.length, MCAST_PORT, MCAST_ADDR, (err) => {
@@ -89,7 +90,7 @@ function startAnnouncing(ip, port) {
       announceSocket.setMulticastTTL(4);
       send();
       announceTimer = setInterval(send, 2000);
-      console.log(`[local-server] Annonces multicast → ${ip}:${port}`);
+      console.log(`[local-server] Annonces multicast → ${ip}:${port} (mode=${mode})`);
     });
   } catch (e) {
     console.warn("[local-server] Impossible de démarrer les annonces multicast:", e.message);
@@ -105,7 +106,7 @@ function stopAnnouncing() {
  * Démarre le serveur local embarqué.
  * Retourne une Promise<{url, ip, port}> quand le serveur est prêt.
  */
-function start() {
+function start(options = {}) {
   return new Promise((resolve, reject) => {
     // Charge express et socket.io depuis node_modules local
     const modulesPath = path.join(__dirname, "node_modules");
@@ -297,7 +298,7 @@ function start() {
       console.log(`[local-server] Démarré → http://127.0.0.1:${LOCAL_PORT} (réseau: http://${ip}:${LOCAL_PORT})`);
       console.log(`[local-server] Fichiers publics: ${PUBLIC_DIR}`);
 
-      startAnnouncing(ip, LOCAL_PORT);
+      startAnnouncing(ip, LOCAL_PORT, options.mode || "desktop-local");
 
       resolve({ url: `http://127.0.0.1:${LOCAL_PORT}`, ip, port: LOCAL_PORT, protocol: "http" });
     });

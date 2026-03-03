@@ -16,6 +16,10 @@ let localServerRunning = false;
 let rediscoveryTimer = null;
 let leaderElection = null;
 
+// ── Mode --server : bypass élection, démarre directement comme serveur dédié ──
+const SERVER_MODE   = process.argv.includes("--server");
+const HEADLESS_MODE = process.argv.includes("--headless");
+
 const MCAST_ADDR = "224.0.0.251";
 const MCAST_PORT = 9999;
 const LISTEN_TIMEOUT_MS = 3000;
@@ -82,30 +86,45 @@ function createWindow() {
   mainWindow.on("closed", () => { mainWindow = null; });
 }
 
-// ── Découverte multicast UDP ─────────────────────────────────────────────────
+// Priorité des modes serveur : docker et dedicated > desktop-local > bully
+const SERVER_MODE_PRIORITY = { docker: 3, dedicated: 2, "desktop-local": 1, apk: 0 };
+
+// ── Découverte multicast UDP ─────────────────────────────────────────────
 function listenMulticast(ignoreIP = null) {
   return new Promise((resolve) => {
     const socket = dgram.createSocket({ type: "udp4", reuseAddr: true });
+    let best = null; // meilleur serveur trouvé jusqu'à maintenant
 
     const timer = setTimeout(() => {
       socket.close();
-      resolve(null);
+      resolve(best); // retourne le meilleur même si pas prioritaire
     }, LISTEN_TIMEOUT_MS);
 
     socket.on("message", (msg) => {
       try {
         const data = JSON.parse(msg.toString("utf8"));
-        if (data.service === "DewiCom" && data.ip && data.port && data.mode !== "apk") {
-          if (ignoreIP && data.ip === ignoreIP) return; // ignore nos propres annonces
+        if (data.service !== "DewiCom" || !data.ip || !data.port) return;
+        if (data.mode === "apk") return; // les APK ne servent pas les Desktop
+        if (ignoreIP && data.ip === ignoreIP) return; // ignore nos propres annonces
+
+        const priority = SERVER_MODE_PRIORITY[data.mode] ?? 1;
+        const bestPriority = SERVER_MODE_PRIORITY[best?.mode] ?? 0;
+
+        if (priority > bestPriority) {
+          best = { ip: data.ip, port: data.port, protocol: data.protocol || "http", mode: data.mode };
+          console.log(`[multicast] Serveur trouvé: ${data.ip}:${data.port} (mode=${data.mode}, priorité=${priority})`);
+        }
+
+        // Serveur dédié/docker : priorité max — résolution immédiate sans attendre la fin du timeout
+        if (priority >= 2) {
           clearTimeout(timer);
           socket.close();
-          console.log(`[multicast] Serveur trouvé: ${data.ip}:${data.port}`);
-          resolve({ ip: data.ip, port: data.port, protocol: data.protocol || "http" });
+          resolve(best);
         }
       } catch (e) { /* ignore parse errors */ }
     });
 
-    socket.on("error", () => { clearTimeout(timer); socket.close(); resolve(null); });
+    socket.on("error", () => { clearTimeout(timer); socket.close(); resolve(best); });
 
     socket.bind(MCAST_PORT, "0.0.0.0", () => {
       try {
@@ -118,7 +137,7 @@ function listenMulticast(ignoreIP = null) {
         console.warn("[multicast] Impossible de rejoindre le groupe:", e.message);
         clearTimeout(timer);
         socket.close();
-        resolve(null);
+        resolve(best);
       }
     });
   });
@@ -220,6 +239,22 @@ async function scanSubnet(port) {
     }
   }
   return null;
+}
+
+// ── Mode serveur dédié (--server) : bypass élection totale ──────────────────
+async function startDedicatedServer() {
+  console.log("[server-mode] Démarrage en mode serveur dédié (--server) — pas d'élection");
+  sendToWindow("discovery-status", "Démarrage serveur dédié...");
+  try {
+    const loc = await localServer.start({ mode: "dedicated" });
+    localServerRunning = true;
+    console.log(`[server-mode] Serveur dédié actif → ${loc.url} (réseau: ${loc.ip}:${loc.port})`);
+    sendToWindow("discovery-status", `Serveur dédié actif — ${loc.ip}:${loc.port}`);
+    return { ip: "127.0.0.1", port: loc.port, protocol: "http" };
+  } catch (e) {
+    console.error("[server-mode] Impossible de démarrer le serveur dédié:", e.message);
+    return null;
+  }
 }
 
 // ── Découverte via élection de leader ─────────────────────────────────────────
@@ -418,21 +453,30 @@ app.whenReady().then(async () => {
     callback(0);
   });
 
+  if (HEADLESS_MODE) {
+    // Mode --server --headless : pas de fenêtre, serveur seul (daemon)
+    console.log("[app] Mode headless actif — pas de fenêtre");
+    discoveredServer = await startDedicatedServer();
+    return;
+  }
+
   createWindow();
 
-  // Découverte en arrière-plan pendant que la fenêtre de chargement s'affiche
-  discoveredServer = await discoverServer();
+  if (SERVER_MODE) {
+    // Mode --server : démarre directement comme serveur dédié, pas d'élection
+    discoveredServer = await startDedicatedServer();
+  } else {
+    // Mode normal : élection Bully
+    discoveredServer = await discoverServer();
+  }
 
   if (discoveredServer) {
     const { ip, port, protocol } = discoveredServer;
     const url = `${protocol}://${ip}:${port}`;
-    const origin = `${protocol}://${ip}:${port}`;
-
-    setupMediaPermissions(origin);
+    setupMediaPermissions(url);
     console.log(`[app] Chargement: ${url}`);
     if (mainWindow) mainWindow.loadURL(url);
   } else {
-    // Aucun serveur → charge la page d'erreur avec option de relancer
     if (mainWindow) mainWindow.loadFile(path.join(__dirname, "no-server.html"));
   }
 });

@@ -62,12 +62,10 @@ if (window.DewiComDesktop && typeof window.DewiComDesktop.openSettings === "func
   if (btn) btn.style.display = "flex";
 }
 
-// Auto-rejoin si credentials sauvegardés
+// Auto-rejoin automatique si credentials sauvegardés — pas de formulaire
 window.addEventListener("load", () => {
   if (savedName && savedChannel) {
-    const hint = document.createElement("div");
-    hint.style.cssText = "font-size:.75rem;color:var(--muted);text-align:center;";
-    hint.innerHTML = `Bienvenue <strong style='color:var(--text)'>${savedName}</strong> — <span style='color:var(--green);cursor:pointer;text-decoration:underline' onclick='document.getElementById("joinBtn").click()'>Rejoindre directement →</span>`;
-    document.getElementById("joinBtn").insertAdjacentElement("beforebegin", hint);
+    // Rejoindre automatiquement après 300ms (laisse le DOM se stabiliser)
+    setTimeout(() => startSession(), 300);
   }
 });
