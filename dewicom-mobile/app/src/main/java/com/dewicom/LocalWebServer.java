@@ -102,7 +102,7 @@ public class LocalWebServer {
             announceSocket = new DatagramSocket();
             announceSocket.setBroadcast(true);
 
-            final byte[] payload = ("{\"service\":\"DewiCom\",\"version\":\"1.0.0\"," +
+            final byte[] payload = ("{\"service\":\"DewiCom\",\"version\":\"" + APP_VERSION + "\"," +
                     "\"ip\":\"" + localIP + "\"," +
                     "\"port\":" + HTTP_PORT + "," +
                     "\"protocol\":\"http\"," +
