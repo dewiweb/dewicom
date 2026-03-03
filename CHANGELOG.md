@@ -5,6 +5,14 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 
 ---
 
+## [1.3.4] — 2026-03-03
+
+### Corrigé
+- **APK — pas d'audio vers/depuis serveur Docker** : `navigator.mediaDevices` est masqué par la WebView Android sur les origines HTTP non-localhost. Fix : injection JS de `isSecureContext=true` + polyfill `navigator.mediaDevices` via `evaluateJavascript` dans `onPageStarted`/`onPageFinished` — `MainActivity.java`
+- **Toutes instances — `isSecureContext` bloquait `getUserMedia` sur HTTP** : la vérification `!window.isSecureContext` dans `startSession()` forçait le mode écoute seule avant même d'essayer `getUserMedia`. Fix : condition supprimée, l'échec réel est géré par le `catch` existant — `shared/public/socket.js`
+
+---
+
 ## [1.3.3] — 2026-03-03
 
 ### Corrigé

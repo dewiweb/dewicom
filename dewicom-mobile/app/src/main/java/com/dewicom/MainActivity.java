@@ -87,19 +87,7 @@ public class MainActivity extends Activity {
             }
         });
 
-        webView.setWebViewClient(new WebViewClient() {
-            @Override
-            public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
-                handler.proceed();
-            }
-            @Override
-            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
-                if (request.isForMainFrame()) {
-                    Log.w(TAG, "Erreur chargement: " + error.getDescription());
-                    runOnUiThread(() -> showServerDialog(true));
-                }
-            }
-        });
+        webView.setWebViewClient(buildWebViewClient(false));
 
         // Expose l'URL courante au JS
         webView.addJavascriptInterface(new Object() {
@@ -160,23 +148,7 @@ public class MainActivity extends Activity {
         webView.setVisibility(View.GONE);
 
         // Masquer l'écran de connexion dès que la page se charge
-        webView.setWebViewClient(new WebViewClient() {
-            @Override
-            public void onPageFinished(WebView view, String url) {
-                hideConnecting();
-            }
-            @Override
-            public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
-                handler.proceed();
-            }
-            @Override
-            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
-                if (request.isForMainFrame()) {
-                    hideConnecting();
-                    runOnUiThread(() -> showServerDialog(true));
-                }
-            }
-        });
+        webView.setWebViewClient(buildWebViewClient(true));
     }
 
     private void hideConnecting() {
@@ -247,6 +219,53 @@ public class MainActivity extends Activity {
             InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
             if (imm != null) imm.showSoftInput(input, InputMethodManager.SHOW_IMPLICIT);
         }, 200);
+    }
+
+    // ── WebViewClient commun avec patch mediaDevices pour HTTP ────────────────
+
+    private static final String SECURE_CONTEXT_PATCH =
+        // Force isSecureContext=true et expose navigator.mediaDevices sur HTTP
+        // La WebView Android masque mediaDevices sur les origines non-HTTPS
+        "(function(){" +
+        "  try { Object.defineProperty(window,'isSecureContext',{value:true,writable:false}); } catch(e){}" +
+        "  if(!navigator.mediaDevices){" +
+        "    try {" +
+        "      Object.defineProperty(navigator,'mediaDevices',{" +
+        "        value: { getUserMedia: function(c){ return navigator.getUserMedia" +
+        "          ? new Promise(function(ok,ko){ navigator.getUserMedia(c,ok,ko); })" +
+        "          : (navigator.webkitGetUserMedia" +
+        "            ? new Promise(function(ok,ko){ navigator.webkitGetUserMedia(c,ok,ko); })" +
+        "            : Promise.reject(new Error('getUserMedia not supported'))); }" +
+        "        }," +
+        "        writable:true, configurable:true" +
+        "      });" +
+        "    } catch(e){}" +
+        "  }" +
+        "})();";
+
+    private WebViewClient buildWebViewClient(boolean hideConnectingOnFinish) {
+        return new WebViewClient() {
+            @Override
+            public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+                view.evaluateJavascript(SECURE_CONTEXT_PATCH, null);
+            }
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                view.evaluateJavascript(SECURE_CONTEXT_PATCH, null);
+                if (hideConnectingOnFinish) hideConnecting();
+            }
+            @Override
+            public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
+                handler.proceed();
+            }
+            @Override
+            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                if (request.isForMainFrame()) {
+                    if (hideConnectingOnFinish) hideConnecting();
+                    runOnUiThread(() -> showServerDialog(true));
+                }
+            }
+        };
     }
 
     private String normalizeUrl(String raw) {
