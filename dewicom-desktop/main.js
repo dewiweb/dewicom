@@ -406,12 +406,13 @@ function startServerWatchdog(serverIp, serverPort, serverProtocol) {
       sendToWindow("discovery-status", "Élection du nouveau serveur...");
       if (leaderElection) { leaderElection.stop(); leaderElection = null; }
       discoveredServer = await discoverServer();
+      // Relance le listener permanent : PC2 peut redémarrer --server pendant la session Bully
+      startSuperiorServerListener();
       if (discoveredServer) {
         const { ip, port, protocol } = discoveredServer;
         const url = `${protocol}://${ip}:${port}`;
         setupMediaPermissions(url);
         sendToWindow("server-changed", url);
-        // Si le nouveau serveur est externe, relancer le watchdog dessus
         if (ip !== "127.0.0.1" && ip !== "localhost") {
           startServerWatchdog(ip, port, protocol);
         }
@@ -674,6 +675,7 @@ app.whenReady().then(async () => {
           discoveredServer = preDiscovered;
         } else {
           discoveredServer = await discoverServer();
+          startSuperiorServerListener();
         }
       }
       if (discoveredServer) {

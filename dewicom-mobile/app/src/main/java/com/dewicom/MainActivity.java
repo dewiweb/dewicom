@@ -14,7 +14,13 @@ import android.net.http.SslCertificate;
 import android.net.http.SslError;
 import android.webkit.JavascriptInterface;
 import android.Manifest;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.util.Log;
 import android.widget.Toast;
 import androidx.core.app.ActivityCompat;
@@ -41,6 +47,8 @@ public class MainActivity extends Activity {
     private volatile boolean scanComplete = false;
     private volatile String foundServerMode = "local";
     private LeaderElection leaderElection;
+    private BroadcastReceiver networkReceiver = null;
+    private volatile boolean wasConnected = true; // état réseau précédent
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -136,6 +144,7 @@ public class MainActivity extends Activity {
         
         // Démarre l'élection de leader
         startLeaderElection();
+        registerNetworkReceiver();
     }
 
     // Interface Java exposée au JavaScript
@@ -265,13 +274,48 @@ public class MainActivity extends Activity {
         watchdogScheduler.scheduleWithFixedDelay(() -> {
             boolean alive = NetworkDiscovery.isDewiComServer(serverIP, 3001);
             if (!alive) {
-                Log.w("MainActivity", "Serveur dédié " + serverIP + " perdu — relance élection");
+                Log.w("MainActivity", "Serveur dédié " + serverIP + " perdu — re-découverte multicast");
                 watchdogScheduler.shutdownNow();
                 watchdogScheduler = null;
-                runOnUiThread(() -> {
-                    pendingRemoteIP = null;
-                    scanComplete = false;
-                    startLeaderElection();
+                // Tente d'abord une re-écoute multicast : un autre serveur dédié a peut-être pris le relais
+                executor.execute(() -> {
+                    String newIP = MulticastDiscovery.listenForDedicated(MainActivity.this);
+                    if (newIP != null && !newIP.equals(serverIP)) {
+                        Log.d("MainActivity", "Nouveau serveur dédié: " + newIP + " — basculement");
+                        String mode = NetworkDiscovery.getServerMode(newIP, 3001);
+                        if ("unknown".equals(mode)) mode = "dedicated";
+                        foundServerIP = newIP;
+                        foundServerMode = mode;
+                        pendingRemoteIP = newIP;
+                        final String ip = newIP; final String m = mode;
+                        runOnUiThread(() -> {
+                            webView.evaluateJavascript(
+                                "window.dewicomServerIP='" + ip + "';" +
+                                "window.dewicomServerMode='" + m + "';" +
+                                "if(typeof reconnectSocket==='function') reconnectSocket('" + ip + "','" + m + "');", null);
+                            webView.loadUrl("http://" + ip + ":3001");
+                        });
+                        startDedicatedServerWatchdog(ip);
+                    } else {
+                        // Aucun serveur dédié → retour en mode Bully
+                        Log.w("MainActivity", "Aucun serveur dédié — retour élection Bully");
+                        runOnUiThread(() -> {
+                            pendingRemoteIP = null;
+                            scanComplete = false;
+                            // Démarrage serveur local puis élection
+                            executor.execute(() -> {
+                                try {
+                                    if (localWebServer == null) localWebServer = new LocalWebServer(MainActivity.this);
+                                    localWebServer.start();
+                                    foundServerIP = "127.0.0.1";
+                                } catch (IOException e) { Log.e("MainActivity", "Erreur serveur local: " + e.getMessage()); }
+                                runOnUiThread(() -> {
+                                    webView.loadUrl("http://127.0.0.1:3001");
+                                    startBullyElection();
+                                });
+                            });
+                        });
+                    }
                 });
             }
         }, 2000, 2000, TimeUnit.MILLISECONDS);
@@ -341,6 +385,57 @@ public class MainActivity extends Activity {
         leaderElection.start();
         // Listener permanent : si un docker/dedicated arrive en cours de session Bully, on bascule
         startSuperiorServerListener();
+    }
+
+    private void registerNetworkReceiver() {
+        if (networkReceiver != null) return;
+        networkReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                ConnectivityManager cm = (ConnectivityManager)
+                    getSystemService(Context.CONNECTIVITY_SERVICE);
+                NetworkInfo info = cm.getActiveNetworkInfo();
+                boolean connected = info != null && info.isConnected();
+                if (connected && !wasConnected) {
+                    Log.d("MainActivity", "[network] Reconnexion réseau — re-découverte serveur");
+                    wasConnected = true;
+                    // Délai court pour laisser le WiFi s'établir
+                    executor.execute(() -> {
+                        try { Thread.sleep(2000); } catch (InterruptedException ignored) {}
+                        // Si on est en local et qu'un serveur dédié est maintenant accessible
+                        if ("127.0.0.1".equals(foundServerIP) || pendingRemoteIP == null) {
+                            String dedicatedIP = MulticastDiscovery.listenForDedicated(MainActivity.this);
+                            if (dedicatedIP != null) {
+                                Log.d("MainActivity", "[network] Serveur dédié retrouvé après reconnexion: " + dedicatedIP);
+                                String mode = NetworkDiscovery.getServerMode(dedicatedIP, 3001);
+                                if ("unknown".equals(mode)) mode = "dedicated";
+                                foundServerIP = dedicatedIP;
+                                foundServerMode = mode;
+                                pendingRemoteIP = dedicatedIP;
+                                final String ip = dedicatedIP; final String m = mode;
+                                runOnUiThread(() -> {
+                                    webView.evaluateJavascript(
+                                        "window.dewicomServerIP='" + ip + "';" +
+                                        "window.dewicomServerMode='" + m + "';" +
+                                        "if(typeof reconnectSocket==='function') reconnectSocket('" + ip + "','" + m + "');", null);
+                                    webView.loadUrl("http://" + ip + ":3001");
+                                });
+                                // Arrête le serveur local s'il tourne
+                                if (localWebServer != null) { localWebServer.stop(); localWebServer = null; }
+                                if (leaderElection != null) { leaderElection.stop(); leaderElection = null; }
+                                stopSuperiorServerListener();
+                                startDedicatedServerWatchdog(ip);
+                            }
+                        }
+                    });
+                } else if (!connected) {
+                    wasConnected = false;
+                }
+            }
+        };
+        IntentFilter filter = new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION);
+        registerReceiver(networkReceiver, filter);
+        Log.d("MainActivity", "[network] BroadcastReceiver connectivité enregistré");
     }
 
     private Thread superiorServerThread = null;
@@ -449,6 +544,7 @@ public class MainActivity extends Activity {
         if (localWebServer != null) { localWebServer.stop(); localWebServer = null; }
         if (watchdogScheduler != null) { watchdogScheduler.shutdownNow(); watchdogScheduler = null; }
         stopSuperiorServerListener();
+        if (networkReceiver != null) { try { unregisterReceiver(networkReceiver); } catch (Exception ignored) {} networkReceiver = null; }
         if (executor != null && !executor.isShutdown()) executor.shutdownNow();
     }
 
