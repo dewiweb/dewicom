@@ -716,6 +716,9 @@ app.whenReady().then(async () => {
       console.log(`[app] Serveur dédié détecté au démarrage: ${preDiscovered.ip}:${preDiscovered.port} (mode=${preDiscovered.mode}) — bypass élection`);
       sendToWindow("discovery-status", `Serveur dédié trouvé — connexion à ${preDiscovered.ip}:${preDiscovered.port}`);
       discoveredServer = preDiscovered;
+      // Listener permanent même en cas de connexion directe : un docker peut arriver après
+      const prePriority = SERVER_MODE_PRIORITY[preDiscovered.mode] ?? 2;
+      startSuperiorServerListener(prePriority - 1); // cède à tout serveur de priorité > mode actuel
     } else {
       // Aucun serveur dédié → élection Bully
       discoveredServer = await discoverServer();
