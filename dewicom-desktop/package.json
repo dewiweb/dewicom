@@ -69,7 +69,8 @@
     "nsis": {
       "include": "build/installer.nsh",
       "perMachine": true,
-      "oneClick": false
+      "oneClick": false,
+      "warningsAsErrors": false
     }
   },
   "devDependencies": {
