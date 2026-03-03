@@ -48,6 +48,7 @@ import java.io.IOException;
 public class MainActivity extends Activity {
     private WebView webView;
     private static final int PERMISSION_REQUEST_CODE = 1;
+    private static final int PERMISSION_LOCATION_CODE = 2;
     private ExecutorService executor = Executors.newCachedThreadPool();
     private LocalWebServer localWebServer;
     private String foundServerIP = null;
@@ -70,9 +71,6 @@ public class MainActivity extends Activity {
 
         // Initialise le serveur local
         localWebServer = new LocalWebServer(this);
-
-        // Demande les permissions au démarrage
-        requestMicrophonePermission();
 
         webView = findViewById(R.id.webview);
         
@@ -155,8 +153,8 @@ public class MainActivity extends Activity {
             }
         });
         
-        // Sélection du WiFi dédié puis démarrage
-        initWifiSelection();
+        // Demande les permissions (micro + localisation pour SSID) puis sélection WiFi
+        requestPermissionsAndInit();
     }
 
     // Interface Java exposée au JavaScript
@@ -653,12 +651,22 @@ public class MainActivity extends Activity {
         if (superiorServerThread != null) { superiorServerThread.interrupt(); superiorServerThread = null; }
     }
 
-    private void requestMicrophonePermission() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) 
+    private void requestPermissionsAndInit() {
+        java.util.List<String> needed = new java.util.ArrayList<>();
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
                 != PackageManager.PERMISSION_GRANTED) {
-            
-            ActivityCompat.requestPermissions(this, 
-                new String[]{Manifest.permission.RECORD_AUDIO}, 
+            needed.add(Manifest.permission.RECORD_AUDIO);
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED) {
+            needed.add(Manifest.permission.ACCESS_FINE_LOCATION);
+        }
+        if (needed.isEmpty()) {
+            // Toutes les permissions déjà accordées
+            initWifiSelection();
+        } else {
+            ActivityCompat.requestPermissions(this,
+                needed.toArray(new String[0]),
                 PERMISSION_REQUEST_CODE);
         }
     }
@@ -666,13 +674,15 @@ public class MainActivity extends Activity {
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        
         if (requestCode == PERMISSION_REQUEST_CODE) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                Toast.makeText(this, "Microphone autorisé !", Toast.LENGTH_SHORT).show();
-            } else {
-                Toast.makeText(this, "Microphone refusé - l\'app ne fonctionnera pas correctement", Toast.LENGTH_LONG).show();
+            for (int i = 0; i < permissions.length; i++) {
+                if (Manifest.permission.RECORD_AUDIO.equals(permissions[i])
+                        && (grantResults.length <= i || grantResults[i] != PackageManager.PERMISSION_GRANTED)) {
+                    Toast.makeText(this, "Microphone refusé - l'app ne fonctionnera pas correctement", Toast.LENGTH_LONG).show();
+                }
             }
+            // Lance l'init WiFi dans tous les cas (même si localisation refusée)
+            initWifiSelection();
         }
     }
 
