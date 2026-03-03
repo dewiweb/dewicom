@@ -243,7 +243,18 @@ async function scanSubnet(port) {
 
 // ── Mode serveur dédié (--server) : bypass élection totale ──────────────────
 async function startDedicatedServer() {
-  console.log("[server-mode] Démarrage en mode serveur dédié (--server) — pas d'élection");
+  console.log("[server-mode] Démarrage en mode serveur dédié (--server)");
+  sendToWindow("discovery-status", "Vérification serveur dédié existant...");
+
+  // Écoute 2s : si un autre serveur dédié/docker existe déjà sur le LAN, s'y connecter
+  const existing = await listenMulticast(getLocalIP());
+  if (existing && existing.mode && SERVER_MODE_PRIORITY[existing.mode] >= 2) {
+    console.log(`[server-mode] Serveur dédié existant détecté: ${existing.ip}:${existing.port} (mode=${existing.mode}) — connexion client`);
+    sendToWindow("discovery-status", `Serveur dédié trouvé — connexion à ${existing.ip}:${existing.port}`);
+    return existing;
+  }
+
+  // Aucun serveur dédié → on démarre le nôtre
   sendToWindow("discovery-status", "Démarrage serveur dédié...");
   try {
     const loc = await localServer.start({ mode: "dedicated" });
@@ -252,7 +263,11 @@ async function startDedicatedServer() {
     sendToWindow("discovery-status", `Serveur dédié actif — ${loc.ip}:${loc.port}`);
     return { ip: "127.0.0.1", port: loc.port, protocol: "http" };
   } catch (e) {
-    console.error("[server-mode] Impossible de démarrer le serveur dédié:", e.message);
+    // Port occupé ou autre erreur — tentative de découverte fallback
+    console.warn("[server-mode] Impossible de démarrer le serveur dédié:", e.message, "— fallback découverte LAN");
+    sendToWindow("discovery-status", "Port occupé — recherche serveur sur le LAN...");
+    const fallback = await listenMulticast(getLocalIP());
+    if (fallback) return fallback;
     return null;
   }
 }
