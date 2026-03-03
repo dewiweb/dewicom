@@ -231,7 +231,7 @@ async function startSession() {
 
   let listenOnly = false;
   try {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.isSecureContext) {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       listenOnly = true;
     } else {
       mediaStream = await navigator.mediaDevices.getUserMedia({ audio: {
