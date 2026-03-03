@@ -15,6 +15,11 @@ const { version: APP_VERSION } = require("./package.json");
 let localServerRunning = false;
 let rediscoveryTimer = null;
 let leaderElection = null;
+let serverWatchdogTimer = null;  // surveille la connexion au serveur externe (docker/dedicated)
+let serverWatchdogFailures = 0;
+
+const SERVER_WATCHDOG_INTERVAL_MS = 5000;  // poll toutes les 5s
+const SERVER_WATCHDOG_MAX_FAILURES = 2;    // 2 échecs consécutifs → failover (~10s)
 
 // ── Mode --server : bypass élection, démarre directement comme serveur dédié ──
 const SERVER_MODE   = process.argv.includes("--server");
@@ -343,6 +348,68 @@ async function discoverServer() {
   });
 }
 
+// ── Watchdog connexion serveur externe (docker/dedicated) ────────────────────
+// Si le serveur externe disparaît, lance une re-découverte puis élection Bully.
+// Chaîne de failover : docker → desktop --server → élection Bully APK/Desktop
+function startServerWatchdog(serverIp, serverPort, serverProtocol) {
+  stopServerWatchdog();
+  serverWatchdogFailures = 0;
+  console.log(`[watchdog] Surveillance serveur externe ${serverIp}:${serverPort} (toutes les ${SERVER_WATCHDOG_INTERVAL_MS}ms)`);
+
+  serverWatchdogTimer = setInterval(async () => {
+    if (localServerRunning) { stopServerWatchdog(); return; } // on est serveur, pas besoin
+    const alive = await checkServer(serverIp, serverPort);
+    if (alive) {
+      serverWatchdogFailures = 0;
+      return;
+    }
+    serverWatchdogFailures++;
+    console.warn(`[watchdog] Serveur ${serverIp}:${serverPort} ne répond pas (${serverWatchdogFailures}/${SERVER_WATCHDOG_MAX_FAILURES})`);
+
+    if (serverWatchdogFailures >= SERVER_WATCHDOG_MAX_FAILURES) {
+      stopServerWatchdog();
+      console.warn("[watchdog] Serveur externe perdu — lancement failover (re-découverte + élection)");
+      sendToWindow("discovery-status", "Serveur perdu — recherche de repli...");
+
+      // 1. Tente d'abord une re-découverte multicast (un autre serveur dédié a peut-être pris le relais)
+      const newServer = await listenMulticast(getLocalIP());
+      if (newServer) {
+        console.log(`[watchdog] Nouveau serveur trouvé: ${newServer.ip}:${newServer.port} (mode=${newServer.mode})`);
+        discoveredServer = newServer;
+        const url = `${newServer.protocol || "http"}://${newServer.ip}:${newServer.port}`;
+        setupMediaPermissions(url);
+        sendToWindow("server-changed", url);
+        startServerWatchdog(newServer.ip, newServer.port, newServer.protocol || "http");
+        return;
+      }
+
+      // 2. Aucun serveur trouvé → élection Bully pour désigner un nouveau leader
+      console.log("[watchdog] Aucun serveur trouvé — démarrage élection Bully");
+      sendToWindow("discovery-status", "Élection du nouveau serveur...");
+      if (leaderElection) { leaderElection.stop(); leaderElection = null; }
+      discoveredServer = await discoverServer();
+      if (discoveredServer) {
+        const { ip, port, protocol } = discoveredServer;
+        const url = `${protocol}://${ip}:${port}`;
+        setupMediaPermissions(url);
+        sendToWindow("server-changed", url);
+        // Si le nouveau serveur est externe, relancer le watchdog dessus
+        if (ip !== "127.0.0.1" && ip !== "localhost") {
+          startServerWatchdog(ip, port, protocol);
+        }
+      }
+    }
+  }, SERVER_WATCHDOG_INTERVAL_MS);
+}
+
+function stopServerWatchdog() {
+  if (serverWatchdogTimer) {
+    clearInterval(serverWatchdogTimer);
+    serverWatchdogTimer = null;
+  }
+  serverWatchdogFailures = 0;
+}
+
 // ── Annonce multicast (si l'app desktop héberge un serveur) ──────────────────
 function startAnnouncing(ip, port) {
   announceSocket = dgram.createSocket({ type: "udp4" });
@@ -490,6 +557,10 @@ app.whenReady().then(async () => {
     const url = `${protocol}://${ip}:${port}`;
     setupMediaPermissions(url);
     console.log(`[app] Chargement: ${url}`);
+    // Si on est client d'un serveur externe → surveiller sa disponibilité
+    if (!localServerRunning && ip !== "127.0.0.1" && ip !== "localhost") {
+      startServerWatchdog(ip, port, protocol);
+    }
     if (mainWindow) mainWindow.loadURL(url);
   } else {
     if (mainWindow) mainWindow.loadFile(path.join(__dirname, "no-server.html"));
@@ -529,6 +600,7 @@ function setupMediaPermissions(origin) {
 
 app.on("window-all-closed", () => {
   stopAnnouncing();
+  stopServerWatchdog();
   if (leaderElection) { leaderElection.stop(); leaderElection = null; }
   if (rediscoveryTimer) { clearInterval(rediscoveryTimer); rediscoveryTimer = null; }
   if (localServerRunning) localServer.stop();
@@ -541,6 +613,7 @@ app.on("activate", () => {
 
 app.on("quit", () => {
   stopAnnouncing();
+  stopServerWatchdog();
   if (leaderElection) { leaderElection.stop(); leaderElection = null; }
   if (rediscoveryTimer) { clearInterval(rediscoveryTimer); rediscoveryTimer = null; }
   if (localServerRunning) localServer.stop();
