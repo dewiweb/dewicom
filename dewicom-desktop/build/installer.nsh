@@ -20,12 +20,8 @@
 
   ; Raccourcis Menu Démarrer supplémentaires (modes serveur)
   ; electron-builder crée déjà "DewiCom" dans $SMPROGRAMS\DewiCom\
-  CreateShortCut "$SMPROGRAMS\DewiCom\DewiCom Server.lnk" \
-    "$INSTDIR\DewiCom.exe" "--server" \
-    "$INSTDIR\DewiCom.exe" 0 SW_SHOWNORMAL
-  CreateShortCut "$SMPROGRAMS\DewiCom\DewiCom Server (headless).lnk" \
-    "$INSTDIR\DewiCom.exe" "--server --headless" \
-    "$INSTDIR\DewiCom.exe" 0 SW_SHOWNORMAL
+  CreateShortCut "$SMPROGRAMS\DewiCom\DewiCom Server.lnk" "$INSTDIR\DewiCom.exe" "--server" "$INSTDIR\DewiCom.exe" 0 SW_SHOWNORMAL
+  CreateShortCut "$SMPROGRAMS\DewiCom\DewiCom Server (headless).lnk" "$INSTDIR\DewiCom.exe" "--server --headless" "$INSTDIR\DewiCom.exe" 0 SW_SHOWNORMAL
 !macroend
 
 !macro customUnInstall

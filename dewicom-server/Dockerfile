@@ -3,14 +3,14 @@ FROM node:20-alpine
 WORKDIR /app
 
 # Dépendances production uniquement
-COPY package.json ./
+COPY dewicom-server/package.json ./
 RUN npm install --omit=dev
 
 # Code serveur
-COPY server.js ./
+COPY dewicom-server/server.js ./
 
 # Fichiers publics partagés (montés en volume en production, copiés pour image autonome)
-COPY --chown=node:node ../shared/public ./public
+COPY --chown=node:node shared/public ./public
 
 ENV NODE_ENV=production \
     PORT=3001 \

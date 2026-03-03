@@ -14,6 +14,8 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 - **`powerSaveBlocker.stop()` non appelé à la fermeture** : le wake lock restait actif après fermeture de l'app sur certains OS. Fix : appel dans `window-all-closed` et `quit` — `main.js`
 - **`setupMediaPermissions()` écrasait `forcedInterface`** : réécriture complète de `server-config.json` à chaque connexion → l'interface réseau forcée par l'utilisateur était perdue. Fix : lecture + merge avant écriture — `main.js`
 - **Watchdog — timeout de détection trop long** : `checkServer()` pouvait mettre 1800ms (HTTP + HTTPS) par tentative, portant le failover réel à ~11s au lieu de 6s. Fix : nouvelle fonction `pingServer()` HTTP-only 500ms dédiée au watchdog — `main.js`
+- **CI NSIS — warning 6050 traité comme erreur** : backslash de continuation de ligne dans `CreateShortCut` générait un warning bloquant. Fix : commandes sur une seule ligne — `build/installer.nsh`
+- **CI Docker — build context trop restreint** : `COPY ../shared/public` hors du context `dewicom-server/`. Fix : context remonté à la racine du repo, chemins Dockerfile adaptés — `Dockerfile`, `release.yml`
 
 ### Ajouté
 - **Raccourcis menu applications** pour les modes serveur — plus besoin de passer par un terminal :
