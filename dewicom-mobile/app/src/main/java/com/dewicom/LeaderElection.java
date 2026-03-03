@@ -26,7 +26,7 @@ import java.util.concurrent.atomic.AtomicReference;
  *      LEADER:<nodeId>:<ip>    → j'ai gagné
  *      HEARTBEAT:<nodeId>:<ip> → je suis vivant (du leader, toutes les 2s)
  *
- * Si le leader ne heartbeate plus pendant LEADER_TIMEOUT_MS → nouvelle élection.
+ * Si le leader ne heartbeate plus pendant LEADER_TIMEOUT_MS (3s) → nouvelle élection.
  */
 public class LeaderElection {
     private static final String TAG = "LeaderElection";
@@ -34,10 +34,10 @@ public class LeaderElection {
     public static final String MCAST_ADDR = "224.0.0.251";
     public static final int ELECT_PORT   = 9998;
 
-    private static final int HEARTBEAT_INTERVAL_MS = 2000;
-    private static final int LEADER_TIMEOUT_MS      = 6000;
-    private static final int ELECTION_WAIT_MS       = 2000; // attente de réponses ELECTION
-    private static final int BROADCAST_COOLDOWN_MS  = 500;  // anti-storm entre deux broadcasts ELECTION
+    private static final int HEARTBEAT_INTERVAL_MS = 1000;  // heartbeat toutes les 1s
+    private static final int LEADER_TIMEOUT_MS      = 3000;  // 3s sans heartbeat → re-élection
+    private static final int ELECTION_WAIT_MS       = 1000;  // 1s d'attente avant de se proclamer leader
+    private static final int BROADCAST_COOLDOWN_MS  = 300;   // anti-storm entre deux broadcasts ELECTION
 
     public enum State { FOLLOWER, CANDIDATE, LEADER }
 

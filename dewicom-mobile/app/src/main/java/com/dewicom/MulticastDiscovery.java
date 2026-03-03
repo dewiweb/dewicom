@@ -23,7 +23,7 @@ public class MulticastDiscovery {
     private static final String TAG = "MulticastDiscovery";
     private static final String MCAST_ADDR = "224.0.0.251";
     private static final int MCAST_PORT = 9999;
-    private static final int LISTEN_TIMEOUT_MS = 3000;
+    private static final int LISTEN_TIMEOUT_MS = 1500;  // 1.5s suffit si annonces toutes les 1s
 
     private static int modePriority(String mode) {
         if (mode == null) return 1;

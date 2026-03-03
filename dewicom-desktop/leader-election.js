@@ -11,10 +11,10 @@ const path  = require("path");
 
 const MCAST_ADDR         = "224.0.0.251";
 const ELECT_PORT         = 9998;
-const HEARTBEAT_INTERVAL = 2000;
-const LEADER_TIMEOUT     = 6000;
-const ELECTION_WAIT      = 2000;  // attente avant de se proclamer leader
-const BROADCAST_COOLDOWN = 500;   // anti-storm : cooldown entre deux broadcasts ELECTION
+const HEARTBEAT_INTERVAL = 1000;  // heartbeat toutes les 1s
+const LEADER_TIMEOUT     = 3000;  // 3s sans heartbeat → re-élection
+const ELECTION_WAIT      = 1000;  // 1s d'attente avant de se proclamer leader
+const BROADCAST_COOLDOWN = 300;   // anti-storm : cooldown entre deux broadcasts ELECTION
 
 function getForcedInterface() {
   try {

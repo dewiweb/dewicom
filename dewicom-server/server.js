@@ -86,7 +86,7 @@ function startAnnouncing(ip, port) {
     sock.bind(() => {
       sock.setMulticastTTL(4);
       send();
-      setInterval(send, 2000);
+      setInterval(send, 1000);  // 1s pour réduire le délai de découverte
       console.log(`[server] Annonces multicast → ${ip}:${port} (mode=${SERVER_MODE})`);
     });
     sock.on("error", (e) => console.warn("[server] Multicast socket error:", e.message));

@@ -122,7 +122,7 @@ public class LocalWebServer {
                         Log.w(TAG, "Erreur annonce multicast", e);
                     }
                 }
-            }, 0, 2000); // immédiat puis toutes les 2s
+            }, 0, 1000); // immédiat puis toutes les 1s — réduit le délai de découverte
 
             Log.d(TAG, "Annonces multicast démarrées sur " + MCAST_ADDR + ":" + MCAST_PORT);
         } catch (Exception e) {

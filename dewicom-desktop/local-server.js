@@ -89,7 +89,7 @@ function startAnnouncing(ip, port, mode = "desktop-local") {
     announceSocket.bind(() => {
       announceSocket.setMulticastTTL(4);
       send();
-      announceTimer = setInterval(send, 2000);
+      announceTimer = setInterval(send, 1000);  // 1s pour réduire le délai de découverte
       console.log(`[local-server] Annonces multicast → ${ip}:${port} (mode=${mode})`);
     });
   } catch (e) {

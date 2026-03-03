@@ -18,8 +18,8 @@ let leaderElection = null;
 let serverWatchdogTimer = null;  // surveille la connexion au serveur externe (docker/dedicated)
 let serverWatchdogFailures = 0;
 
-const SERVER_WATCHDOG_INTERVAL_MS = 5000;  // poll toutes les 5s
-const SERVER_WATCHDOG_MAX_FAILURES = 2;    // 2 échecs consécutifs → failover (~10s)
+const SERVER_WATCHDOG_INTERVAL_MS = 2000;  // poll toutes les 2s
+const SERVER_WATCHDOG_MAX_FAILURES = 3;    // 3 échecs consécutifs → failover (~6s, évite faux positifs WiFi)
 
 // ── Mode --server : bypass élection, démarre directement comme serveur dédié ──
 const SERVER_MODE   = process.argv.includes("--server");
@@ -27,7 +27,7 @@ const HEADLESS_MODE = process.argv.includes("--headless");
 
 const MCAST_ADDR = "224.0.0.251";
 const MCAST_PORT = 9999;
-const LISTEN_TIMEOUT_MS = 3000;
+const LISTEN_TIMEOUT_MS = 1500;
 const SCAN_TIMEOUT_MS = 600;
 const SCAN_TIMEOUT_HTTPS_MS = 1200;
 const DEWICOM_PORT = 3001;
