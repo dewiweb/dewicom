@@ -400,30 +400,38 @@ public class MainActivity extends Activity {
     // ── Sélection WiFi dédié ─────────────────────────────────────────────────────
 
     private String getCurrentSsid() {
+        // Android 10+ : WifiInfo.getSSID() retourne <unknown ssid> sans permission systeme
+        // On tente quand meme via WifiManager (fonctionne si location accordee + scanning actif)
         WifiManager wm = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
-        if (wm == null || !wm.isWifiEnabled()) return null;
-        WifiInfo info = wm.getConnectionInfo();
-        if (info == null) return null;
-        String ssid = info.getSSID();
-        if (ssid == null || ssid.equals("<unknown ssid>")) return null;
-        // Android entoure le SSID de guillemets
-        return ssid.startsWith("\"") ? ssid.substring(1, ssid.length() - 1) : ssid;
-    }
-
-    private java.util.List<String> getAvailableSsids() {
-        WifiManager wm = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
-        java.util.List<String> ssids = new java.util.ArrayList<>();
-        String current = getCurrentSsid();
-        if (current != null) ssids.add(current); // WiFi actif en premier
-        if (wm != null) {
-            java.util.List<android.net.wifi.ScanResult> results = wm.getScanResults();
-            if (results != null) {
-                for (android.net.wifi.ScanResult r : results) {
-                    if (r.SSID != null && !r.SSID.isEmpty() && !ssids.contains(r.SSID)) {
-                        ssids.add(r.SSID);
-                    }
+        if (wm != null && wm.isWifiEnabled()) {
+            WifiInfo info = wm.getConnectionInfo();
+            if (info != null) {
+                String ssid = info.getSSID();
+                if (ssid != null && !ssid.equals("<unknown ssid>") && !ssid.isEmpty()) {
+                    return ssid.startsWith("\"") ? ssid.substring(1, ssid.length() - 1) : ssid;
                 }
             }
+        }
+        return null;
+    }
+
+    private java.util.List<String> getKnownSsids() {
+        // Reseaux WiFi enregistres sur l'appareil (ne necessite pas de permission sur API < 29)
+        java.util.List<String> ssids = new java.util.ArrayList<>();
+        String current = getCurrentSsid();
+        if (current != null) ssids.add(current);
+        WifiManager wm = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+        if (wm != null) {
+            try {
+                java.util.List<android.net.wifi.WifiConfiguration> configs = wm.getConfiguredNetworks();
+                if (configs != null) {
+                    for (android.net.wifi.WifiConfiguration c : configs) {
+                        if (c.SSID == null) continue;
+                        String s = c.SSID.startsWith("\"") ? c.SSID.substring(1, c.SSID.length() - 1) : c.SSID;
+                        if (!s.isEmpty() && !ssids.contains(s)) ssids.add(s);
+                    }
+                }
+            } catch (Exception ignored) {}
         }
         return ssids;
     }
@@ -452,24 +460,53 @@ public class MainActivity extends Activity {
     }
 
     private void showWifiSelectionDialog(String currentSsid) {
-        java.util.List<String> ssids = getAvailableSsids();
-        if (ssids.isEmpty() && currentSsid != null) ssids.add(currentSsid);
+        java.util.List<String> known = getKnownSsids();
 
-        String[] items;
-        if (ssids.isEmpty()) {
-            // Pas de WiFi disponible : utiliser le WiFi actuel ou passer
-            items = new String[]{"Continuer sans WiFi dédié"};
-        } else {
-            items = ssids.toArray(new String[0]);
+        // Conteneur du dialogue
+        LinearLayout container = new LinearLayout(this);
+        container.setOrientation(LinearLayout.VERTICAL);
+        int pad = (int)(16 * getResources().getDisplayMetrics().density);
+        container.setPadding(pad * 2, pad, pad * 2, 0);
+
+        // Champ de saisie manuelle
+        android.widget.EditText input = new android.widget.EditText(this);
+        input.setHint("Nom du réseau WiFi (SSID)");
+        input.setSingleLine(true);
+        input.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
+        if (currentSsid != null) input.setText(currentSsid);
+        else if (!known.isEmpty()) input.setText(known.get(0));
+        container.addView(input);
+
+        // Liste des réseaux connus (suggestions)
+        if (!known.isEmpty()) {
+            TextView hint = new TextView(this);
+            hint.setText("Réseaux enregistrés :");
+            hint.setTextSize(12);
+            hint.setTextColor(0xFF888888);
+            hint.setPadding(0, pad, 0, 4);
+            container.addView(hint);
+
+            for (String s : known) {
+                Button btn = new Button(this);
+                btn.setText(s);
+                btn.setTextSize(13);
+                btn.setAllCaps(false);
+                btn.setPadding(0, 4, 0, 4);
+                btn.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+                btn.setTextColor(0xFF4FC3F7);
+                btn.setOnClickListener(v -> input.setText(s));
+                container.addView(btn);
+            }
         }
 
         new AlertDialog.Builder(this)
-            .setTitle("Choisir le réseau WiFi DewiCom")
-            .setMessage("Sélectionnez le WiFi sur lequel le serveur DewiCom est accessible.\nL'app se déconnectera si vous changez de réseau.")
-            .setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, items), (dialog, which) -> {
-                String chosen = items[which];
-                if (chosen.equals("Continuer sans WiFi dédié")) {
-                    // Mode sans contrainte WiFi
+            .setTitle("Réseau WiFi DewiCom")
+            .setMessage("L'app se connecte uniquement sur ce réseau.\nElle se met en pause si vous changez de WiFi.")
+            .setView(container)
+            .setPositiveButton("Confirmer", (dialog, w) -> {
+                String chosen = input.getText().toString().trim();
+                if (chosen.isEmpty()) {
+                    // Vide = sans contrainte
                     chosenSsid = null;
                     onChosenWifi = true;
                     startLeaderElection();
@@ -479,7 +516,9 @@ public class MainActivity extends Activity {
                         .edit().putString(PREF_SSID, chosenSsid).apply();
                     Log.d("MainActivity", "[wifi] SSID choisi: " + chosenSsid);
                     String current = getCurrentSsid();
-                    if (chosenSsid.equals(current)) {
+                    // Si on ne peut pas lire le SSID actuel, on suppose qu'on y est
+                    boolean onIt = current == null || chosenSsid.equals(current);
+                    if (onIt) {
                         onChosenWifi = true;
                         startLeaderElection();
                     } else {
@@ -489,12 +528,10 @@ public class MainActivity extends Activity {
                     registerWifiReceiver();
                 }
             })
-            .setNeutralButton("Changer de réseau", (dialog, w) -> {
-                // Efface le choix mémorisé et réaffiche le dialogue
-                getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                    .edit().remove(PREF_SSID).apply();
+            .setNegativeButton("Sans contrainte WiFi", (dialog, w) -> {
                 chosenSsid = null;
-                showWifiSelectionDialog(getCurrentSsid());
+                onChosenWifi = true;
+                startLeaderElection();
             })
             .setCancelable(false)
             .show();
@@ -652,22 +689,13 @@ public class MainActivity extends Activity {
     }
 
     private void requestPermissionsAndInit() {
-        java.util.List<String> needed = new java.util.ArrayList<>();
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
                 != PackageManager.PERMISSION_GRANTED) {
-            needed.add(Manifest.permission.RECORD_AUDIO);
-        }
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-                != PackageManager.PERMISSION_GRANTED) {
-            needed.add(Manifest.permission.ACCESS_FINE_LOCATION);
-        }
-        if (needed.isEmpty()) {
-            // Toutes les permissions déjà accordées
-            initWifiSelection();
-        } else {
             ActivityCompat.requestPermissions(this,
-                needed.toArray(new String[0]),
+                new String[]{Manifest.permission.RECORD_AUDIO},
                 PERMISSION_REQUEST_CODE);
+        } else {
+            initWifiSelection();
         }
     }
 
