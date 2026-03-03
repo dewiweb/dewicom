@@ -69,7 +69,19 @@
     "nsis": {
       "include": "build/installer.nsh",
       "perMachine": true,
-      "oneClick": false
+      "oneClick": false,
+      "additionalShortcuts": [
+        {
+          "name": "DewiCom Server",
+          "description": "Lancer DewiCom en mode serveur dédié",
+          "args": "--server"
+        },
+        {
+          "name": "DewiCom Server (headless)",
+          "description": "Lancer DewiCom en mode serveur sans fenêtre",
+          "args": "--server --headless"
+        }
+      ]
     }
   },
   "devDependencies": {
