@@ -5,6 +5,23 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 
 ---
 
+## [1.3.2] — 2026-03-03
+
+### Corrigé
+- **`resumeTimers()` — double démarrage serveur au réveil de veille** : appelait `_becomeLeader()` qui retriggerait le callback `onBecomeLeader` → tentative de démarrer un second serveur sur port 3001 déjà occupé. Fix : appel direct à `_startHeartbeat()` — `leader-election.js`
+- **`startAnnouncing()` — champ `mode` absent du payload multicast** : les annonces émises par le Desktop en mode leader Bully ne contenaient pas le champ `mode`, cassant la hiérarchie de priorité de découverte pour les autres nœuds. Fix : ajout de `mode` (défaut `"desktop-local"`) + intervalle aligné à 1s — `main.js`
+- **`NetworkDiscovery.getServerMode()` Android — modes v1.3 non reconnus** : `docker`, `dedicated`, `desktop-local` étaient tous mappés sur `"nodejs"`, perdant l'information de hiérarchie lors du fallback HTTP. Fix : détection par itération des 4 modes — `NetworkDiscovery.java`
+- **`powerSaveBlocker.stop()` non appelé à la fermeture** : le wake lock restait actif après fermeture de l'app sur certains OS. Fix : appel dans `window-all-closed` et `quit` — `main.js`
+- **`setupMediaPermissions()` écrasait `forcedInterface`** : réécriture complète de `server-config.json` à chaque connexion → l'interface réseau forcée par l'utilisateur était perdue. Fix : lecture + merge avant écriture — `main.js`
+- **Watchdog — timeout de détection trop long** : `checkServer()` pouvait mettre 1800ms (HTTP + HTTPS) par tentative, portant le failover réel à ~11s au lieu de 6s. Fix : nouvelle fonction `pingServer()` HTTP-only 500ms dédiée au watchdog — `main.js`
+
+### Ajouté
+- **Raccourcis menu applications** pour les modes serveur — plus besoin de passer par un terminal :
+  - **Windows** (NSIS) : `DewiCom Server` et `DewiCom Server (headless)` dans le Menu Démarrer — `build/installer.nsh`
+  - **Linux** (deb) : entrées `.desktop` installées dans `/usr/share/applications/` via scripts `postinst`/`prerm` — `build/linux/`
+
+---
+
 ## [1.3] — 2026-03-03
 
 Refonte complète de l'architecture réseau : passage d'un système à élection unique à une **hiérarchie de déploiement à 3 niveaux** avec failover automatique et dégradation gracieuse.
