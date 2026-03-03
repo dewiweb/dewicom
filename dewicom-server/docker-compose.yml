@@ -6,13 +6,17 @@ services:
       dockerfile: Dockerfile
     container_name: dewicom-server
     restart: always
-    network_mode: host        # requis pour multicast UDP LAN (announce discovery)
+    # network_mode: host est requis pour que le multicast UDP LAN fonctionne.
+    # Si un autre service utilise déjà le port ${PORT:-3001} sur le host :
+    #   → changer DEWICOM_PORT dans le fichier .env (ex: DEWICOM_PORT=3005)
+    #   → les clients découvrent le bon port via l'announce multicast automatiquement
+    network_mode: host
     environment:
-      PORT: 3001
-      SERVER_MODE: docker
-      SERVER_NAME: DewiCom-Server
+      PORT: ${DEWICOM_PORT:-3001}
+      SERVER_MODE: ${SERVER_MODE:-docker}
+      SERVER_NAME: ${SERVER_NAME:-DewiCom-Server}
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3001/api/dewicom-discovery"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:${DEWICOM_PORT:-3001}/api/dewicom-discovery"]
       interval: 10s
       timeout: 3s
       retries: 3
