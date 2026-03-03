@@ -788,12 +788,20 @@ function setupMediaPermissions(origin) {
   // Persiste l'origine pour le prochain démarrage — préserve forcedInterface
   const fs = require("fs");
   const configPath = path.join(app.getPath("userData"), "server-config.json");
+  let previousOrigin = null;
   try {
     let config = {};
-    try { config = JSON.parse(fs.readFileSync(configPath, "utf8")); } catch (e) {}
+    try { config = JSON.parse(fs.readFileSync(configPath, "utf8")); previousOrigin = config.origin || null; } catch (e) {}
     config.origin = origin;
     fs.writeFileSync(configPath, JSON.stringify(config), "utf8");
   } catch (e) {}
+
+  // Si l'origine HTTP a changé, relancer pour que le flag Chromium soit appliqué correctement
+  if (origin.startsWith("http://") && previousOrigin !== origin) {
+    console.log(`[permissions] Origine HTTP changée (${previousOrigin} → ${origin}) — relancement pour appliquer le secure context`);
+    app.relaunch();
+    app.exit(0);
+  }
 }
 
 app.on("window-all-closed", () => {
