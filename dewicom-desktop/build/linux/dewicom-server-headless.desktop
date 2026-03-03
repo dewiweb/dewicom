@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=DewiCom Server (headless)
+GenericName=PTT Server Daemon
+Comment=DewiCom — serveur daemon sans fenêtre (mode --server --headless)
+Exec=dewicom --server --headless
+Icon=dewicom
+Terminal=false
+Type=Application
+Categories=AudioVideo;Audio;Network;
+Keywords=PTT;radio;intercom;server;daemon;headless;
+StartupNotify=false

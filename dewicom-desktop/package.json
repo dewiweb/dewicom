@@ -42,7 +42,17 @@
         "AppImage",
         "deb"
       ],
-      "category": "AudioVideo"
+      "category": "AudioVideo",
+      "desktop": {
+        "Name": "DewiCom",
+        "Comment": "Application PTT inter-appareils sur réseau local",
+        "Categories": "AudioVideo;Audio;Network;",
+        "Keywords": "PTT;radio;intercom;"
+      }
+    },
+    "deb": {
+      "afterInstall": "build/linux/postinst.sh",
+      "afterRemove": "build/linux/prerm.sh"
     },
     "mac": {
       "target": [

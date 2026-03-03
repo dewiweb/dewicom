@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=DewiCom Server
+GenericName=PTT Server
+Comment=DewiCom — serveur dédié (mode --server)
+Exec=dewicom --server
+Icon=dewicom
+Terminal=false
+Type=Application
+Categories=AudioVideo;Audio;Network;
+Keywords=PTT;radio;intercom;server;
+StartupNotify=false
