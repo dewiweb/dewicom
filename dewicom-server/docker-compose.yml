@@ -1,0 +1,21 @@
+services:
+  dewicom-server:
+    image: dewicom-server:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dewicom-server
+    restart: always
+    network_mode: host        # requis pour multicast UDP LAN (announce discovery)
+    environment:
+      PORT: 3001
+      SERVER_MODE: docker
+      SERVER_NAME: DewiCom-Server
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/api/dewicom-discovery"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    volumes:
+      - ../shared/public:/app/public:ro   # fichiers client partagés (lecture seule)

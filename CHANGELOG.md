@@ -5,6 +5,28 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 
 ---
 
+## [1.3.0] — 2026-03-03
+
+### Ajouté
+- **`dewicom-server` — service standalone Niveau 1 (le plus robuste)** :
+  - `server.js` : serveur Node.js autonome extrait de `local-server.js`, découplé d'Electron
+  - `Dockerfile` + `docker-compose.yml` : déploiement Docker avec `restart: always`, healthcheck intégré (`/api/dewicom-discovery`), `network_mode: host` pour le multicast LAN
+  - Variable `SERVER_MODE` (`docker` | `dedicated`) annoncée dans le payload multicast — permet aux clients de prioriser ce serveur sur l'élection Bully
+  - Endpoint `/api/status` : état temps réel (users connectés, canaux, uptime)
+  - Arrêt propre sur `SIGTERM`/`SIGINT`
+  - **Image Docker** publiée automatiquement sur `ghcr.io` à chaque tag via CI/CD
+
+- **Workflow CI/CD** : job `docker-image` ajouté dans `release.yml` — build + push sur GitHub Container Registry (`ghcr.io/dewiweb/dewicom/dewicom-server:latest` + tag version)
+
+### Architecture 3 niveaux
+| Niveau | Infrastructure         | Robustesse | Mécanisme              |
+|--------|------------------------|------------|------------------------|
+| 1      | Docker / serveur dédié | ★★★★★      | `dewicom-server`       |
+| 2      | Desktop mode `--server`| ★★★★☆      | À venir (v1.4.0)       |
+| 3      | APK only               | ★★★☆☆      | Élection Bully (actuel)|
+
+---
+
 ## [1.2.5] — 2026-03-02
 
 ### Corrigé
