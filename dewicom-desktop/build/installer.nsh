@@ -19,6 +19,7 @@
   SetShellVarContext all
   StrCpy $0 "$SMPROGRAMS\DewiCom"
   StrCpy $1 "$INSTDIR\DewiCom.exe"
+  CreateDirectory "$0"
   CreateShortCut "$0\DewiCom Server.lnk" "$1" "--server" "$1" 0 SW_SHOWNORMAL
   CreateShortCut "$0\DewiCom Server Headless.lnk" "$1" "--server --headless" "$1" 0 SW_SHOWMINIMIZED
   SetShellVarContext current
