@@ -18,7 +18,8 @@ let leaderElection = null;
 let serverWatchdogTimer = null;  // surveille la connexion au serveur externe (docker/dedicated)
 let serverWatchdogFailures = 0;
 let powerBlockerId = null;       // identifiant powerSaveBlocker (inhibition veille mode --server)
-let superiorServerSocket = null; // listener multicast permanent (détecte arrivée docker/dedicated en cours de session)
+let mcastSocket = null;          // socket multicast persistant unique (partagé entre découverte + superior listener)
+let mcastListeners = new Set();  // callbacks actifs sur le socket persistant
 
 const SERVER_WATCHDOG_INTERVAL_MS = 2000;  // poll toutes les 2s
 const SERVER_WATCHDOG_MAX_FAILURES = 3;    // 3 échecs consécutifs → failover (~6s, évite faux positifs WiFi)
@@ -96,57 +97,70 @@ function createWindow() {
 // Priorité des modes serveur : docker et dedicated > desktop-local > bully
 const SERVER_MODE_PRIORITY = { docker: 3, dedicated: 2, "desktop-local": 1, apk: 0 };
 
-// ── Découverte multicast UDP ─────────────────────────────────────────────
-function listenMulticast(ignoreIP = null) {
-  return new Promise((resolve) => {
-    const socket = dgram.createSocket({ type: "udp4", reuseAddr: true });
-    let best = null; // meilleur serveur trouvé jusqu'à maintenant
-
-    const timer = setTimeout(() => {
-      socket.close();
-      resolve(best); // retourne le meilleur même si pas prioritaire
-    }, LISTEN_TIMEOUT_MS);
-
-    socket.on("message", (msg) => {
-      try {
-        const data = JSON.parse(msg.toString("utf8"));
-        if (data.service !== "DewiCom" || !data.ip || !data.port) return;
-        if (data.mode === "apk") return; // les APK ne servent pas les Desktop
-        if (ignoreIP && data.ip === ignoreIP) return; // ignore nos propres annonces
-
-        const priority = SERVER_MODE_PRIORITY[data.mode] ?? 1;
-        const bestPriority = SERVER_MODE_PRIORITY[best?.mode] ?? 0;
-
-        if (priority > bestPriority) {
-          best = { ip: data.ip, port: data.port, protocol: data.protocol || "http", mode: data.mode };
-          console.log(`[multicast] Serveur trouvé: ${data.ip}:${data.port} (mode=${data.mode}, priorité=${priority})`);
-        }
-
-        // Serveur dédié/docker : priorité max — résolution immédiate sans attendre la fin du timeout
-        if (priority >= 2) {
-          clearTimeout(timer);
-          socket.close();
-          resolve(best);
-        }
-      } catch (e) { /* ignore parse errors */ }
+// ── Socket multicast persistant unique ──────────────────────────────────────
+// Un seul socket bind sur MCAST_PORT 9999 ; tous les listeners s'y abonnent via callbacks.
+function ensureMcastSocket() {
+  if (mcastSocket) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const s = dgram.createSocket({ type: "udp4", reuseAddr: true });
+    s.on("message", (msg) => {
+      let data;
+      try { data = JSON.parse(msg.toString("utf8")); } catch (e) { return; }
+      if (data.service !== "DewiCom" || !data.ip || !data.port) return;
+      for (const cb of [...mcastListeners]) { try { cb(data); } catch (e) {} }
     });
-
-    socket.on("error", () => { clearTimeout(timer); socket.close(); resolve(best); });
-
-    socket.bind(MCAST_PORT, "0.0.0.0", () => {
+    s.on("error", (e) => {
+      console.warn("[mcast-socket] Erreur:", e.message, "— réouverture dans 2s");
+      try { s.close(); } catch (_) {}
+      mcastSocket = null;
+      setTimeout(() => ensureMcastSocket(), 2000);
+    });
+    s.bind(MCAST_PORT, "0.0.0.0", () => {
       try {
         const localIP = getLocalIP();
-        try { socket.addMembership(MCAST_ADDR, localIP); } catch (e) {
-          socket.addMembership(MCAST_ADDR);
-        }
-        console.log(`[multicast] Écoute ${MCAST_ADDR}:${MCAST_PORT} pendant ${LISTEN_TIMEOUT_MS}ms...`);
+        try { s.addMembership(MCAST_ADDR, localIP); } catch (e) { s.addMembership(MCAST_ADDR); }
+        mcastSocket = s;
+        console.log(`[mcast-socket] Socket persistant ouvert (${MCAST_ADDR}:${MCAST_PORT})`);
+        resolve();
       } catch (e) {
-        console.warn("[multicast] Impossible de rejoindre le groupe:", e.message);
-        clearTimeout(timer);
-        socket.close();
-        resolve(best);
+        console.warn("[mcast-socket] Impossible de rejoindre le groupe:", e.message);
+        try { s.close(); } catch (_) {}
+        reject(e);
       }
     });
+  });
+}
+
+// ── Découverte multicast UDP ─────────────────────────────────────────────
+function listenMulticast(ignoreIP = null) {
+  return new Promise(async (resolve) => {
+    let best = null;
+    let resolved = false;
+    const done = (val) => { if (!resolved) { resolved = true; mcastListeners.delete(cb); resolve(val); } };
+
+    const timer = setTimeout(() => done(best), LISTEN_TIMEOUT_MS);
+
+    const cb = (data) => {
+      if (data.mode === "apk") return;
+      if (ignoreIP && data.ip === ignoreIP) return;
+      const priority = SERVER_MODE_PRIORITY[data.mode] ?? 1;
+      const bestPriority = SERVER_MODE_PRIORITY[best?.mode] ?? 0;
+      if (priority > bestPriority) {
+        best = { ip: data.ip, port: data.port, protocol: data.protocol || "http", mode: data.mode };
+        console.log(`[multicast] Serveur trouvé: ${data.ip}:${data.port} (mode=${data.mode}, priorité=${priority})`);
+      }
+      if (priority >= 2) { clearTimeout(timer); done(best); }
+    };
+
+    try {
+      await ensureMcastSocket();
+      mcastListeners.add(cb);
+      console.log(`[multicast] Écoute ${MCAST_ADDR}:${MCAST_PORT} pendant ${LISTEN_TIMEOUT_MS}ms...`);
+    } catch (e) {
+      console.warn("[multicast] Socket indisponible:", e.message);
+      clearTimeout(timer);
+      done(null);
+    }
   });
 }
 
@@ -456,57 +470,44 @@ function stopAnnouncing() {
 }
 
 // ── Listener multicast permanent : détecte l'arrivée d'un serveur supérieur en cours de session ──
-// Si un docker/dedicated apparaît alors qu'on est en mode Bully (leader ou follower), on bascule dessus.
+// S'appuie sur le socket persistant partagé (pas de conflit de port).
+let superiorListenerCb = null;
+
 function startSuperiorServerListener() {
   stopSuperiorServerListener();
-  superiorServerSocket = dgram.createSocket({ type: "udp4", reuseAddr: true });
-  superiorServerSocket.on("message", async (msg) => {
-    try {
-      const data = JSON.parse(msg.toString("utf8"));
-      if (data.service !== "DewiCom" || !data.ip || !data.port) return;
-      const priority = SERVER_MODE_PRIORITY[data.mode] ?? 0;
-      if (priority < 2) return; // on ne s'intéresse qu'aux docker/dedicated
-      if (data.ip === getLocalIP()) return; // ignore nos propres annonces
-      // Vérifie qu'on n'est pas déjà connecté à ce serveur
-      if (discoveredServer && discoveredServer.ip === data.ip) return;
-      console.log(`[superior-listener] Serveur supérieur détecté: ${data.ip}:${data.port} (mode=${data.mode}) — basculement`);
-      stopSuperiorServerListener();
-      // Arrête l'élection Bully si active
-      if (leaderElection) { leaderElection.stop(); leaderElection = null; }
-      // Arrête le serveur local si on était leader
-      if (localServerRunning) {
-        localServer.notifyRedirect(`http://${data.ip}:${data.port}`);
-        await new Promise(r => setTimeout(r, 300));
-        localServer.stop();
-        localServerRunning = false;
-      }
-      stopServerWatchdog();
-      discoveredServer = { ip: data.ip, port: data.port, protocol: data.protocol || "http" };
-      const url = `${data.protocol || "http"}://${data.ip}:${data.port}`;
-      setupMediaPermissions(url);
-      sendToWindow("server-changed", url);
-      startServerWatchdog(data.ip, data.port, data.protocol || "http");
-    } catch (e) { /* ignore parse errors */ }
-  });
-  superiorServerSocket.on("error", () => stopSuperiorServerListener());
-  superiorServerSocket.bind(MCAST_PORT, "0.0.0.0", () => {
-    try {
-      const localIP = getLocalIP();
-      try { superiorServerSocket.addMembership(MCAST_ADDR, localIP); } catch (e) {
-        superiorServerSocket.addMembership(MCAST_ADDR);
-      }
-      console.log(`[superior-listener] Écoute multicast permanente démarrée (${MCAST_ADDR}:${MCAST_PORT})`);
-    } catch (e) {
-      console.warn("[superior-listener] Impossible de rejoindre le groupe:", e.message);
-      stopSuperiorServerListener();
+  superiorListenerCb = async (data) => {
+    const priority = SERVER_MODE_PRIORITY[data.mode] ?? 0;
+    if (priority < 2) return;
+    if (data.ip === getLocalIP()) return;
+    if (discoveredServer && discoveredServer.ip === data.ip) return;
+    console.log(`[superior-listener] Serveur supérieur détecté: ${data.ip}:${data.port} (mode=${data.mode}) — basculement`);
+    stopSuperiorServerListener();
+    if (leaderElection) { leaderElection.stop(); leaderElection = null; }
+    if (localServerRunning) {
+      localServer.notifyRedirect(`http://${data.ip}:${data.port}`);
+      await new Promise(r => setTimeout(r, 300));
+      localServer.stop();
+      localServerRunning = false;
     }
-  });
+    stopServerWatchdog();
+    discoveredServer = { ip: data.ip, port: data.port, protocol: data.protocol || "http", mode: data.mode };
+    const url = `${data.protocol || "http"}://${data.ip}:${data.port}`;
+    setupMediaPermissions(url);
+    sendToWindow("server-changed", url);
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.loadURL(url);
+    startServerWatchdog(data.ip, data.port, data.protocol || "http");
+  };
+  ensureMcastSocket().then(() => {
+    mcastListeners.add(superiorListenerCb);
+    console.log("[superior-listener] Listener démarré (socket partagé)");
+  }).catch(e => console.warn("[superior-listener] Socket indisponible:", e.message));
 }
 
 function stopSuperiorServerListener() {
-  if (superiorServerSocket) {
-    try { superiorServerSocket.close(); } catch (e) {}
-    superiorServerSocket = null;
+  if (superiorListenerCb) {
+    mcastListeners.delete(superiorListenerCb);
+    superiorListenerCb = null;
+    console.log("[superior-listener] Listener arrêté");
   }
 }
 
