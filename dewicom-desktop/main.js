@@ -471,13 +471,14 @@ function stopAnnouncing() {
 
 // ── Listener multicast permanent : détecte l'arrivée d'un serveur supérieur en cours de session ──
 // S'appuie sur le socket persistant partagé (pas de conflit de port).
+// minPriority : seuil minimum (exclusif) pour basculer — 2 en mode Bully, 3 en mode --server (docker only)
 let superiorListenerCb = null;
 
-function startSuperiorServerListener() {
+function startSuperiorServerListener(minPriority = 2) {
   stopSuperiorServerListener();
   superiorListenerCb = async (data) => {
     const priority = SERVER_MODE_PRIORITY[data.mode] ?? 0;
-    if (priority < 2) return;
+    if (priority <= minPriority) return; // doit être strictement supérieur au mode courant
     if (data.ip === getLocalIP()) return;
     if (discoveredServer && discoveredServer.ip === data.ip) return;
     console.log(`[superior-listener] Serveur supérieur détecté: ${data.ip}:${data.port} (mode=${data.mode}) — basculement`);
@@ -696,6 +697,7 @@ app.whenReady().then(async () => {
     // Mode --server --headless : pas de fenêtre, serveur seul (daemon)
     console.log("[app] Mode headless actif — pas de fenêtre");
     discoveredServer = await startDedicatedServer();
+    if (localServerRunning) startSuperiorServerListener(2); // cède uniquement aux docker
     return;
   }
 
@@ -704,6 +706,9 @@ app.whenReady().then(async () => {
   if (SERVER_MODE) {
     // Mode --server : démarre directement comme serveur dédié, pas d'élection
     discoveredServer = await startDedicatedServer();
+    // Si on a démarré notre propre serveur (pas connecté à un existant),
+    // écouter les annonces docker qui pourraient arriver et y basculer
+    if (localServerRunning) startSuperiorServerListener(2); // cède uniquement aux docker (priority=3)
   } else {
     // Mode normal : écoute multicast d'abord — si un serveur dédié/docker existe, s'y connecter
     const preDiscovered = await listenMulticast(null);
