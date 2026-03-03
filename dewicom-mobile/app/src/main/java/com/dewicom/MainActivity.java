@@ -216,10 +216,36 @@ public class MainActivity extends Activity {
     private void startLeaderElection() {
         localServerAddress = getLocalIPAddress();
 
-        // Démarre d'abord le serveur local et la page (secure context)
+        // Pré-écoute multicast : si un serveur dedicated/docker est présent, connexion directe
         executor.execute(() -> {
+            String dedicatedIP = MulticastDiscovery.listenForDedicated(MainActivity.this);
+            if (dedicatedIP != null) {
+                Log.d("MainActivity", "Serveur dédié détecté via multicast: " + dedicatedIP + " — bypass élection");
+                String mode = NetworkDiscovery.getServerMode(dedicatedIP, 3001);
+                if ("unknown".equals(mode)) mode = "dedicated";
+                foundServerIP = dedicatedIP;
+                foundServerMode = mode;
+                pendingRemoteIP = dedicatedIP;
+                scanComplete = true;
+                final String serverIP = dedicatedIP;
+                final String serverMode = mode;
+                runOnUiThread(() -> {
+                    webView.evaluateJavascript(
+                        "window.dewicomServerIP='" + serverIP + "';" +
+                        "window.dewicomServerMode='" + serverMode + "';" +
+                        "window.dewicomScanComplete=true;" +
+                        "if(typeof reconnectSocket==='function') reconnectSocket('" + serverIP + "','" + serverMode + "');",
+                        null);
+                    webView.loadUrl("http://" + serverIP + ":3001");
+                });
+                // Pas d'élection Bully — on surveille juste que le serveur reste là
+                startDedicatedServerWatchdog(dedicatedIP);
+                return;
+            }
+
+            // Aucun serveur dédié → démarrage normal avec serveur local + élection Bully
             try {
-                if (localWebServer == null) localWebServer = new LocalWebServer(this);
+                if (localWebServer == null) localWebServer = new LocalWebServer(MainActivity.this);
                 localWebServer.start();
                 foundServerIP = "127.0.0.1";
                 Log.d("MainActivity", "Serveur local prêt sur 127.0.0.1:3001");
@@ -227,8 +253,31 @@ public class MainActivity extends Activity {
                 Log.e("MainActivity", "Erreur serveur local: " + e.getMessage());
             }
             runOnUiThread(() -> webView.loadUrl("http://127.0.0.1:3001"));
+            runOnUiThread(() -> startBullyElection());
         });
+    }
 
+    private ScheduledExecutorService watchdogScheduler = null;
+
+    private void startDedicatedServerWatchdog(String serverIP) {
+        if (watchdogScheduler != null) watchdogScheduler.shutdownNow();
+        watchdogScheduler = Executors.newSingleThreadScheduledExecutor();
+        watchdogScheduler.scheduleWithFixedDelay(() -> {
+            boolean alive = NetworkDiscovery.isDewiComServer(serverIP, 3001);
+            if (!alive) {
+                Log.w("MainActivity", "Serveur dédié " + serverIP + " perdu — relance élection");
+                watchdogScheduler.shutdownNow();
+                watchdogScheduler = null;
+                runOnUiThread(() -> {
+                    pendingRemoteIP = null;
+                    scanComplete = false;
+                    startLeaderElection();
+                });
+            }
+        }, 2000, 2000, TimeUnit.MILLISECONDS);
+    }
+
+    private void startBullyElection() {
         leaderElection = new LeaderElection(this, localServerAddress, new LeaderElection.Listener() {
             @Override
             public void onBecomeLeader(String myIP) {
@@ -327,6 +376,7 @@ public class MainActivity extends Activity {
     private void stopAll() {
         if (leaderElection != null) { leaderElection.stop(); leaderElection = null; }
         if (localWebServer != null) { localWebServer.stop(); localWebServer = null; }
+        if (watchdogScheduler != null) { watchdogScheduler.shutdownNow(); watchdogScheduler = null; }
         if (executor != null && !executor.isShutdown()) executor.shutdownNow();
     }
 

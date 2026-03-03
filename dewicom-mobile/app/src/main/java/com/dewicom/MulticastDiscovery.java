@@ -122,6 +122,56 @@ public class MulticastDiscovery {
         return e < 0 ? null : json.substring(i, e);
     }
 
+    /**
+     * Écoute le multicast et retourne l'IP uniquement si un serveur de priorité >= 2
+     * (dedicated ou docker) est trouvé. Retourne null sinon (timeout ou desktop-local/apk).
+     */
+    public static String listenForDedicated(Context context) {
+        WifiManager wifiManager = (WifiManager) context.getApplicationContext()
+                .getSystemService(Context.WIFI_SERVICE);
+        WifiManager.MulticastLock lock = null;
+        try {
+            lock = wifiManager.createMulticastLock("dewicom_dedicated");
+            lock.setReferenceCounted(true);
+            lock.acquire();
+
+            InetAddress group = InetAddress.getByName(MCAST_ADDR);
+            MulticastSocket socket = new MulticastSocket(MCAST_PORT);
+            socket.setSoTimeout(500);
+            socket.setReuseAddress(true);
+            socket.joinGroup(group);
+
+            byte[] buf = new byte[512];
+            DatagramPacket packet = new DatagramPacket(buf, buf.length);
+            long deadline = System.currentTimeMillis() + LISTEN_TIMEOUT_MS;
+
+            while (System.currentTimeMillis() < deadline) {
+                try {
+                    packet.setLength(buf.length);
+                    socket.receive(packet);
+                    String json = new String(packet.getData(), 0, packet.getLength(), "UTF-8");
+                    if (!json.contains("\"DewiCom\"")) continue;
+                    String mode = extractJson(json, "mode");
+                    if (modePriority(mode) >= 2) {
+                        String ip = extractJson(json, "ip");
+                        if (ip != null) {
+                            socket.leaveGroup(group);
+                            socket.close();
+                            return ip;
+                        }
+                    }
+                } catch (java.net.SocketTimeoutException ignored) {}
+            }
+            socket.leaveGroup(group);
+            socket.close();
+        } catch (Exception e) {
+            Log.w(TAG, "listenForDedicated: " + e.getMessage());
+        } finally {
+            if (lock != null && lock.isHeld()) lock.release();
+        }
+        return null;
+    }
+
     private static String extractJsonNumber(String json, String key) {
         String search = "\"" + key + "\":";
         int i = json.indexOf(search);

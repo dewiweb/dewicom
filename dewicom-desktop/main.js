@@ -467,10 +467,20 @@ ipcMain.handle("get-server-url", () => {
 });
 
 ipcMain.handle("rediscover", async () => {
-  discoveredServer = await discoverServer();
+  if (leaderElection) { leaderElection.stop(); leaderElection = null; }
+  const preDiscovered = await listenMulticast(null);
+  if (preDiscovered && SERVER_MODE_PRIORITY[preDiscovered.mode] >= 2) {
+    discoveredServer = preDiscovered;
+  } else {
+    discoveredServer = await discoverServer();
+  }
   if (discoveredServer && mainWindow) {
     const { ip, port, protocol } = discoveredServer;
+    setupMediaPermissions(`${protocol}://${ip}:${port}`);
     setTimeout(() => mainWindow.loadURL(`${protocol}://${ip}:${port}`), 500);
+    if (!localServerRunning && ip !== "127.0.0.1" && ip !== "localhost") {
+      startServerWatchdog(ip, port, protocol);
+    }
   }
   return discoveredServer;
 });
