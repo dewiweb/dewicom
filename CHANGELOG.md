@@ -5,44 +5,93 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 
 ---
 
-## [1.3.1] — 2026-03-03
+## [1.3] — 2026-03-03
 
-### Ajouté
-- **Mode `--server` Desktop (Niveau 2)** : le Desktop peut démarrer directement en mode serveur dédié sans passer par l'élection Bully — `main.js`
-  - `--server` : démarre le serveur local immédiatement, annonce `mode=dedicated` en multicast
-  - `--server --headless` : mode daemon sans fenêtre (idéal pour PC dédié en régie ou RPi avec Electron)
-  - `local-server.js` : paramètre `options.mode` pour configurer le mode annoncé aux clients
-
-- **Hiérarchie de découverte multicast** (Niveau 1 > Niveau 2 > Niveau 3) — `main.js`
-  - `docker` (priorité 3) et `dedicated` (priorité 2) → résolution immédiate, bypass élection
-  - `desktop-local` (priorité 1) → résolution normale après timeout
-  - Si un serveur `docker`/`dedicated` est détecté pendant l'écoute, connexion immédiate sans attendre la fin du timeout
-
-- **Auto-rejoin sans formulaire** — `shared/public/app.js`
-  - Si `name` + `channel` sont en `localStorage`, `startSession()` s'exécute automatiquement au chargement de la page (300ms de délai pour stabilisation DOM)
-  - L'utilisateur ne voit plus jamais le formulaire après la première connexion — reconnexion transparente après coupure, redémarrage serveur, ou re-élection
-
----
-
-## [1.3.0] — 2026-03-03
-
-### Ajouté
-- **`dewicom-server` — service standalone Niveau 1 (le plus robuste)** :
-  - `server.js` : serveur Node.js autonome extrait de `local-server.js`, découplé d'Electron
-  - `Dockerfile` + `docker-compose.yml` : déploiement Docker avec `restart: always`, healthcheck intégré (`/api/dewicom-discovery`), `network_mode: host` pour le multicast LAN
-  - Variable `SERVER_MODE` (`docker` | `dedicated`) annoncée dans le payload multicast — permet aux clients de prioriser ce serveur sur l'élection Bully
-  - Endpoint `/api/status` : état temps réel (users connectés, canaux, uptime)
-  - Arrêt propre sur `SIGTERM`/`SIGINT`
-  - **Image Docker** publiée automatiquement sur `ghcr.io` à chaque tag via CI/CD
-
-- **Workflow CI/CD** : job `docker-image` ajouté dans `release.yml` — build + push sur GitHub Container Registry (`ghcr.io/dewiweb/dewicom/dewicom-server:latest` + tag version)
+Refonte complète de l'architecture réseau : passage d'un système à élection unique à une **hiérarchie de déploiement à 3 niveaux** avec failover automatique et dégradation gracieuse.
 
 ### Architecture 3 niveaux
-| Niveau | Infrastructure         | Robustesse | Mécanisme              |
-|--------|------------------------|------------|------------------------|
-| 1      | Docker / serveur dédié | ★★★★★      | `dewicom-server`       |
-| 2      | Desktop mode `--server`| ★★★★☆      | À venir (v1.4.0)       |
-| 3      | APK only               | ★★★☆☆      | Élection Bully (actuel)|
+
+| Niveau | Infrastructure | Robustesse | Déploiement |
+|--------|---------------|------------|-------------|
+| 1 | Docker / serveur dédié | ★★★★★ | `docker compose up -d` |
+| 2 | Desktop `--server` | ★★★★☆ | `DewiCom --server [--headless]` |
+| 3 | APK only | ★★★☆☆ | Élection Bully automatique |
+
+### Nouveau — `dewicom-server` service standalone (Niveau 1)
+
+Serveur Node.js autonome extrait de `local-server.js`, entièrement découplé d'Electron, déployable sur Docker, RPi ou PC dédié sans interface graphique.
+
+- `Dockerfile` + `docker-compose.yml` : `restart: always`, `network_mode: host` (multicast LAN), healthcheck sur `/api/dewicom-discovery`
+- Port configurable via `.env` (`DEWICOM_PORT`) — évite les conflits avec d'autres services Docker
+- Endpoint `/api/status` : état temps réel (users, canaux, uptime)
+- Arrêt propre sur `SIGTERM`/`SIGINT`
+- **Image Docker** publiée automatiquement sur `ghcr.io` à chaque tag via CI/CD
+
+```bash
+# Déploiement en 2 commandes
+git clone https://github.com/dewiweb/dewicom && cd dewicom/dewicom-server
+docker compose up -d
+```
+
+### Nouveau — Mode `--server` Desktop (Niveau 2)
+
+- `DewiCom --server` : démarre immédiatement comme serveur dédié, annonce `mode=dedicated` en multicast, **sans passer par l'élection Bully**
+- `DewiCom --server --headless` : mode daemon sans fenêtre (régie headless, RPi avec Electron)
+- Si un autre serveur `--server` existe déjà sur le LAN, se connecte dessus en client — **pas de conflit de port**
+- En mode `--server` : **inhibition de veille système** (`powerSaveBlocker`) — le PC ne peut pas dormir tant qu'il sert de serveur
+
+### Nouveau — Hiérarchie de découverte multicast
+
+Le champ `mode` est ajouté à tous les payloads multicast (`docker`/`dedicated`/`desktop-local`/`apk`). Tous les clients (Desktop + Android) appliquent la même priorité :
+
+- `docker` (3) et `dedicated` (2) → **résolution immédiate**, bypass élection
+- `desktop-local` (1) → résolution après timeout
+- `apk` (0) → ignoré par les clients non-APK
+
+### Nouveau — Failover automatique complet
+
+Watchdog de connexion serveur côté Desktop : si le serveur externe disparaît, après ~6s (3 échecs × 2s) :
+1. Re-découverte multicast (un autre serveur dédié a peut-être pris le relais)
+2. Si rien → élection Bully entre les nœuds Desktop/APK restants
+
+**Chaîne de dégradation gracieuse :**
+
+```
+Docker tombe  → Desktop prend le relais (~7s)
+Desktop tombe → autre Desktop ou APK élu (~4-6s)
+APK leader tombe → autre APK élu (~4s)
+```
+
+### Nouveau — Auto-rejoin sans formulaire
+
+Si `name` + `channel` sont en `localStorage`, `startSession()` s'exécute automatiquement au chargement. L'utilisateur ne voit plus jamais le formulaire après la première connexion — reconnexion transparente lors de tout failover.
+
+### Nouveau — Page de monitoring `/monitor`
+
+Accessible depuis n'importe quel navigateur sur le LAN : `http://<ip-serveur>:3001/monitor`
+
+- Canaux et utilisateurs connectés en temps réel (Socket.io, pas de polling)
+- Badge `● PARLE` animé pendant les transmissions PTT
+- Uptime, mode serveur, version, journal horodaté des connexions/départs
+- Disponible sur Docker **et** Desktop `--server`
+
+### Améliorations — Timings failover (−50%)
+
+| Paramètre | Avant | Après |
+|-----------|-------|-------|
+| Heartbeat Bully | 2s | **1s** |
+| Leader timeout | 6s | **3s** |
+| Election wait | 2s | **1s** |
+| Announce multicast | 2s | **1s** |
+| Watchdog Desktop | 5s×2 | **2s×3** |
+| Multicast listen | 3s | **1.5s** |
+
+### Améliorations — Gestion veille système (Desktop)
+
+- `powerMonitor.on("suspend")` : pause propre des timers Bully et watchdog avant la veille
+- `powerMonitor.on("resume")` : 2s de délai puis vérification serveur, re-découverte si nécessaire
+- `pauseTimers()`/`resumeTimers()` sur `LeaderElection` — reprise sans re-élection fantôme
+- Hiérarchie découverte multicast appliquée aussi côté Android (`MulticastDiscovery.java`)
 
 ---
 
