@@ -339,6 +339,77 @@ public class MainActivity extends Activity {
             }
         });
         leaderElection.start();
+        // Listener permanent : si un docker/dedicated arrive en cours de session Bully, on bascule
+        startSuperiorServerListener();
+    }
+
+    private Thread superiorServerThread = null;
+    private volatile boolean superiorListenerRunning = false;
+
+    private void startSuperiorServerListener() {
+        stopSuperiorServerListener();
+        superiorListenerRunning = true;
+        superiorServerThread = new Thread(() -> {
+            android.net.wifi.WifiManager wm = (android.net.wifi.WifiManager)
+                getApplicationContext().getSystemService(android.content.Context.WIFI_SERVICE);
+            android.net.wifi.WifiManager.MulticastLock lock = null;
+            try {
+                lock = wm.createMulticastLock("dewicom_superior");
+                lock.setReferenceCounted(true);
+                lock.acquire();
+                java.net.InetAddress group = java.net.InetAddress.getByName(MulticastDiscovery.MCAST_ADDR_PUBLIC);
+                java.net.MulticastSocket socket = new java.net.MulticastSocket(MulticastDiscovery.MCAST_PORT_PUBLIC);
+                socket.setReuseAddress(true);
+                socket.setSoTimeout(500);
+                socket.joinGroup(group);
+                byte[] buf = new byte[512];
+                while (superiorListenerRunning) {
+                    try {
+                        java.net.DatagramPacket pkt = new java.net.DatagramPacket(buf, buf.length);
+                        socket.receive(pkt);
+                        String json = new String(pkt.getData(), 0, pkt.getLength(), "UTF-8");
+                        if (!json.contains("\"DewiCom\"")) continue;
+                        String mode = MulticastDiscovery.extractJsonPublic(json, "mode");
+                        if (MulticastDiscovery.modePriorityPublic(mode) < 2) continue;
+                        String ip = MulticastDiscovery.extractJsonPublic(json, "ip");
+                        if (ip == null || ip.equals(foundServerIP)) continue;
+                        Log.d("MainActivity", "[superior-listener] Serveur supérieur détecté: " + ip + " (mode=" + mode + ")");
+                        superiorListenerRunning = false;
+                        final String serverIP = ip;
+                        final String serverMode = mode;
+                        // Bascule vers ce serveur
+                        if (leaderElection != null) { leaderElection.stop(); leaderElection = null; }
+                        if (localWebServer != null) { localWebServer.stop(); localWebServer = null; }
+                        foundServerIP = serverIP;
+                        foundServerMode = serverMode;
+                        pendingRemoteIP = serverIP;
+                        scanComplete = true;
+                        runOnUiThread(() -> {
+                            webView.evaluateJavascript(
+                                "window.dewicomServerIP='" + serverIP + "';" +
+                                "window.dewicomServerMode='" + serverMode + "';" +
+                                "if(typeof reconnectSocket==='function') reconnectSocket('" + serverIP + "','" + serverMode + "');",
+                                null);
+                            webView.loadUrl("http://" + serverIP + ":3001");
+                        });
+                        startDedicatedServerWatchdog(serverIP);
+                    } catch (java.net.SocketTimeoutException ignored) {}
+                }
+                socket.leaveGroup(group);
+                socket.close();
+            } catch (Exception e) {
+                Log.w("MainActivity", "superior-listener: " + e.getMessage());
+            } finally {
+                if (lock != null && lock.isHeld()) lock.release();
+            }
+        }, "dewicom-superior-listener");
+        superiorServerThread.setDaemon(true);
+        superiorServerThread.start();
+    }
+
+    private void stopSuperiorServerListener() {
+        superiorListenerRunning = false;
+        if (superiorServerThread != null) { superiorServerThread.interrupt(); superiorServerThread = null; }
     }
 
     private void requestMicrophonePermission() {
@@ -377,6 +448,7 @@ public class MainActivity extends Activity {
         if (leaderElection != null) { leaderElection.stop(); leaderElection = null; }
         if (localWebServer != null) { localWebServer.stop(); localWebServer = null; }
         if (watchdogScheduler != null) { watchdogScheduler.shutdownNow(); watchdogScheduler = null; }
+        stopSuperiorServerListener();
         if (executor != null && !executor.isShutdown()) executor.shutdownNow();
     }
 

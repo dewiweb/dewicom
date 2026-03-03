@@ -21,9 +21,15 @@ import java.util.concurrent.TimeUnit;
  */
 public class MulticastDiscovery {
     private static final String TAG = "MulticastDiscovery";
-    private static final String MCAST_ADDR = "224.0.0.251";
-    private static final int MCAST_PORT = 9999;
+    public static final String MCAST_ADDR_PUBLIC = "224.0.0.251";
+    public static final int    MCAST_PORT_PUBLIC  = 9999;
+
+    private static final String MCAST_ADDR = MCAST_ADDR_PUBLIC;
+    private static final int MCAST_PORT = MCAST_PORT_PUBLIC;
     private static final int LISTEN_TIMEOUT_MS = 1500;  // 1.5s suffit si annonces toutes les 1s
+
+    public static int modePriorityPublic(String mode) { return modePriority(mode); }
+    public static String extractJsonPublic(String json, String key) { return extractJson(json, key); }
 
     private static int modePriority(String mode) {
         if (mode == null) return 1;
