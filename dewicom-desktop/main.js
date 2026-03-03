@@ -18,6 +18,7 @@ let leaderElection = null;
 let serverWatchdogTimer = null;  // surveille la connexion au serveur externe (docker/dedicated)
 let serverWatchdogFailures = 0;
 let powerBlockerId = null;       // identifiant powerSaveBlocker (inhibition veille mode --server)
+let superiorServerSocket = null; // listener multicast permanent (détecte arrivée docker/dedicated en cours de session)
 
 const SERVER_WATCHDOG_INTERVAL_MS = 2000;  // poll toutes les 2s
 const SERVER_WATCHDOG_MAX_FAILURES = 3;    // 3 échecs consécutifs → failover (~6s, évite faux positifs WiFi)
@@ -452,6 +453,61 @@ function stopAnnouncing() {
   if (announceSocket) { try { announceSocket.close(); } catch (e) {} announceSocket = null; }
 }
 
+// ── Listener multicast permanent : détecte l'arrivée d'un serveur supérieur en cours de session ──
+// Si un docker/dedicated apparaît alors qu'on est en mode Bully (leader ou follower), on bascule dessus.
+function startSuperiorServerListener() {
+  stopSuperiorServerListener();
+  superiorServerSocket = dgram.createSocket({ type: "udp4", reuseAddr: true });
+  superiorServerSocket.on("message", async (msg) => {
+    try {
+      const data = JSON.parse(msg.toString("utf8"));
+      if (data.service !== "DewiCom" || !data.ip || !data.port) return;
+      const priority = SERVER_MODE_PRIORITY[data.mode] ?? 0;
+      if (priority < 2) return; // on ne s'intéresse qu'aux docker/dedicated
+      if (data.ip === getLocalIP()) return; // ignore nos propres annonces
+      // Vérifie qu'on n'est pas déjà connecté à ce serveur
+      if (discoveredServer && discoveredServer.ip === data.ip) return;
+      console.log(`[superior-listener] Serveur supérieur détecté: ${data.ip}:${data.port} (mode=${data.mode}) — basculement`);
+      stopSuperiorServerListener();
+      // Arrête l'élection Bully si active
+      if (leaderElection) { leaderElection.stop(); leaderElection = null; }
+      // Arrête le serveur local si on était leader
+      if (localServerRunning) {
+        localServer.notifyRedirect(`http://${data.ip}:${data.port}`);
+        await new Promise(r => setTimeout(r, 300));
+        localServer.stop();
+        localServerRunning = false;
+      }
+      stopServerWatchdog();
+      discoveredServer = { ip: data.ip, port: data.port, protocol: data.protocol || "http" };
+      const url = `${data.protocol || "http"}://${data.ip}:${data.port}`;
+      setupMediaPermissions(url);
+      sendToWindow("server-changed", url);
+      startServerWatchdog(data.ip, data.port, data.protocol || "http");
+    } catch (e) { /* ignore parse errors */ }
+  });
+  superiorServerSocket.on("error", () => stopSuperiorServerListener());
+  superiorServerSocket.bind(MCAST_PORT, "0.0.0.0", () => {
+    try {
+      const localIP = getLocalIP();
+      try { superiorServerSocket.addMembership(MCAST_ADDR, localIP); } catch (e) {
+        superiorServerSocket.addMembership(MCAST_ADDR);
+      }
+      console.log(`[superior-listener] Écoute multicast permanente démarrée (${MCAST_ADDR}:${MCAST_PORT})`);
+    } catch (e) {
+      console.warn("[superior-listener] Impossible de rejoindre le groupe:", e.message);
+      stopSuperiorServerListener();
+    }
+  });
+}
+
+function stopSuperiorServerListener() {
+  if (superiorServerSocket) {
+    try { superiorServerSocket.close(); } catch (e) {}
+    superiorServerSocket = null;
+  }
+}
+
 // ── IPC helpers ───────────────────────────────────────────────────────────────
 function sendToWindow(channel, data) {
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -654,6 +710,8 @@ app.whenReady().then(async () => {
     } else {
       // Aucun serveur dédié → élection Bully
       discoveredServer = await discoverServer();
+      // Listener permanent : si un docker/dedicated arrive en cours de session, on bascule dessus
+      startSuperiorServerListener();
     }
   }
 
