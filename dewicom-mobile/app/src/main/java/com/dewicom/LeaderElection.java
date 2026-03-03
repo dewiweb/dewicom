@@ -24,7 +24,7 @@ import java.util.concurrent.atomic.AtomicReference;
  *  - Messages multicast sur ELECT_PORT :
  *      ELECTION:<nodeId>:<ip>  → je candidate
  *      LEADER:<nodeId>:<ip>    → j'ai gagné
- *      HEARTBEAT:<nodeId>:<ip> → je suis vivant (du leader, toutes les 2s)
+ *      HEARTBEAT:<nodeId>:<ip> → je suis vivant (du leader, toutes les 1s)
  *
  * Si le leader ne heartbeate plus pendant LEADER_TIMEOUT_MS (3s) → nouvelle élection.
  */

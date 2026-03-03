@@ -231,8 +231,11 @@ public class NetworkDiscovery {
             if (conn.getResponseCode() == 200) {
                 String body = new java.util.Scanner(conn.getInputStream()).useDelimiter("\\A").next();
                 conn.disconnect();
-                if (body.contains("\"mode\":\"apk\"")) return "apk";
-                if (body.contains("DewiCom")) return "nodejs";
+                // Extrait le champ mode du JSON pour respecter la hiérarchie v1.3
+                for (String mode : new String[]{"docker", "dedicated", "desktop-local", "apk"}) {
+                    if (body.contains("\"mode\":\"" + mode + "\"")) return mode;
+                }
+                if (body.contains("DewiCom")) return "desktop-local"; // fallback générique
             }
             conn.disconnect();
         } catch (Exception ignored) {}

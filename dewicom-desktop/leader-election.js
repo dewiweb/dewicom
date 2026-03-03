@@ -110,7 +110,7 @@ class LeaderElection {
     if (!this.running) return;
     this.lastHeartbeat = Date.now(); // évite un faux timeout immédiat
     if (this.state === "LEADER") {
-      this._becomeLeader(); // reprend heartbeat
+      this._startHeartbeat(); // reprend uniquement le heartbeat — pas de callback onBecomeLeader
     } else {
       this._startWatchdog(); // reprend watchdog follower
     }

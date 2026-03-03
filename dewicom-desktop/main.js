@@ -349,6 +349,22 @@ async function discoverServer() {
   });
 }
 
+// Ping rapide dédié au watchdog : HTTP only, timeout 500ms (pas de fallback HTTPS)
+function pingServer(ip, port) {
+  return new Promise((resolve) => {
+    const req = require("http").get({
+      hostname: ip, port,
+      path: "/api/dewicom-discovery",
+      timeout: 500,
+    }, (res) => {
+      res.resume();
+      resolve(res.statusCode === 200);
+    });
+    req.on("error", () => resolve(false));
+    req.on("timeout", () => { req.destroy(); resolve(false); });
+  });
+}
+
 // ── Watchdog connexion serveur externe (docker/dedicated) ────────────────────
 // Si le serveur externe disparaît, lance une re-découverte puis élection Bully.
 // Chaîne de failover : docker → desktop --server → élection Bully APK/Desktop
@@ -359,7 +375,7 @@ function startServerWatchdog(serverIp, serverPort, serverProtocol) {
 
   serverWatchdogTimer = setInterval(async () => {
     if (localServerRunning) { stopServerWatchdog(); return; } // on est serveur, pas besoin
-    const alive = await checkServer(serverIp, serverPort);
+    const alive = await pingServer(serverIp, serverPort); // ping léger 500ms, pas checkServer 1800ms
     if (alive) {
       serverWatchdogFailures = 0;
       return;
@@ -412,11 +428,11 @@ function stopServerWatchdog() {
 }
 
 // ── Annonce multicast (si l'app desktop héberge un serveur) ──────────────────
-function startAnnouncing(ip, port) {
+function startAnnouncing(ip, port, mode = "desktop-local") {
   announceSocket = dgram.createSocket({ type: "udp4" });
   const payload = Buffer.from(JSON.stringify({
     service: "DewiCom", version: APP_VERSION,
-    ip, port, protocol: "http"
+    ip, port, protocol: "http", mode,
   }));
 
   const send = () => {
@@ -426,8 +442,8 @@ function startAnnouncing(ip, port) {
   announceSocket.bind(() => {
     announceSocket.setMulticastTTL(4);
     send();
-    announceTimer = setInterval(send, 2000);
-    console.log(`[announce] Annonces multicast démarrées: ${ip}:${port}`);
+    announceTimer = setInterval(send, 1000);  // 1s, aligné sur les autres points d'announce
+    console.log(`[announce] Annonces multicast démarrées: ${ip}:${port} (mode=${mode})`);
   });
 }
 
@@ -652,11 +668,14 @@ function setupMediaPermissions(origin) {
     }
   });
 
-  // Persiste l'origine pour le prochain démarrage via un fichier de config
+  // Persiste l'origine pour le prochain démarrage — préserve forcedInterface
   const fs = require("fs");
   const configPath = path.join(app.getPath("userData"), "server-config.json");
   try {
-    fs.writeFileSync(configPath, JSON.stringify({ origin }), "utf8");
+    let config = {};
+    try { config = JSON.parse(fs.readFileSync(configPath, "utf8")); } catch (e) {}
+    config.origin = origin;
+    fs.writeFileSync(configPath, JSON.stringify(config), "utf8");
   } catch (e) {}
 }
 
@@ -664,8 +683,8 @@ app.on("window-all-closed", () => {
   stopAnnouncing();
   stopServerWatchdog();
   if (leaderElection) { leaderElection.stop(); leaderElection = null; }
-  if (rediscoveryTimer) { clearInterval(rediscoveryTimer); rediscoveryTimer = null; }
   if (localServerRunning) localServer.stop();
+  if (powerBlockerId !== null) { powerSaveBlocker.stop(powerBlockerId); powerBlockerId = null; }
   if (process.platform !== "darwin") app.quit();
 });
 
@@ -677,6 +696,6 @@ app.on("quit", () => {
   stopAnnouncing();
   stopServerWatchdog();
   if (leaderElection) { leaderElection.stop(); leaderElection = null; }
-  if (rediscoveryTimer) { clearInterval(rediscoveryTimer); rediscoveryTimer = null; }
   if (localServerRunning) localServer.stop();
+  if (powerBlockerId !== null) { powerSaveBlocker.stop(powerBlockerId); powerBlockerId = null; }
 });
