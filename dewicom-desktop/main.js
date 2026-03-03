@@ -391,12 +391,13 @@ function startServerWatchdog(serverIp, serverPort, serverProtocol) {
 
       // 1. Tente d'abord une re-découverte multicast (un autre serveur dédié a peut-être pris le relais)
       const newServer = await listenMulticast(getLocalIP());
-      if (newServer) {
-        console.log(`[watchdog] Nouveau serveur trouvé: ${newServer.ip}:${newServer.port} (mode=${newServer.mode})`);
+      if (newServer && SERVER_MODE_PRIORITY[newServer.mode] >= 2) {
+        console.log(`[watchdog] Nouveau serveur dédié trouvé: ${newServer.ip}:${newServer.port} (mode=${newServer.mode})`);
         discoveredServer = newServer;
         const url = `${newServer.protocol || "http"}://${newServer.ip}:${newServer.port}`;
         setupMediaPermissions(url);
         sendToWindow("server-changed", url);
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.loadURL(url);
         startServerWatchdog(newServer.ip, newServer.port, newServer.protocol || "http");
         return;
       }
