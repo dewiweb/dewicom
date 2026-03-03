@@ -600,7 +600,16 @@ app.whenReady().then(async () => {
       // Serveur perdu ou pas encore trouvé → re-découverte complète
       console.log("[power] Serveur inaccessible après réveil — re-découverte");
       if (leaderElection) { leaderElection.stop(); leaderElection = null; }
-      discoveredServer = SERVER_MODE ? await startDedicatedServer() : await discoverServer();
+      if (SERVER_MODE) {
+        discoveredServer = await startDedicatedServer();
+      } else {
+        const preDiscovered = await listenMulticast(null);
+        if (preDiscovered && SERVER_MODE_PRIORITY[preDiscovered.mode] >= 2) {
+          discoveredServer = preDiscovered;
+        } else {
+          discoveredServer = await discoverServer();
+        }
+      }
       if (discoveredServer) {
         const { ip, port, protocol } = discoveredServer;
         const url = `${protocol}://${ip}:${port}`;
@@ -626,8 +635,16 @@ app.whenReady().then(async () => {
     // Mode --server : démarre directement comme serveur dédié, pas d'élection
     discoveredServer = await startDedicatedServer();
   } else {
-    // Mode normal : élection Bully
-    discoveredServer = await discoverServer();
+    // Mode normal : écoute multicast d'abord — si un serveur dédié/docker existe, s'y connecter
+    const preDiscovered = await listenMulticast(null);
+    if (preDiscovered && SERVER_MODE_PRIORITY[preDiscovered.mode] >= 2) {
+      console.log(`[app] Serveur dédié détecté au démarrage: ${preDiscovered.ip}:${preDiscovered.port} (mode=${preDiscovered.mode}) — bypass élection`);
+      sendToWindow("discovery-status", `Serveur dédié trouvé — connexion à ${preDiscovered.ip}:${preDiscovered.port}`);
+      discoveredServer = preDiscovered;
+    } else {
+      // Aucun serveur dédié → élection Bully
+      discoveredServer = await discoverServer();
+    }
   }
 
   if (discoveredServer) {
