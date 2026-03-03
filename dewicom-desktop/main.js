@@ -3,6 +3,25 @@ const dgram = require("dgram");
 const path = require("path");
 const os = require("os");
 
+// Traite l'origine HTTP du serveur DewiCom comme secure context → getUserMedia fonctionne sans HTTPS
+// L'origine est lue depuis server-config.json (écrit au démarrage précédent par setupMediaPermissions)
+;(() => {
+  try {
+    const fs = require("fs");
+    const path = require("path");
+    // app.getPath("userData") n'est pas encore disponible, on construit le chemin manuellement
+    const userDataDir = process.env.APPDATA
+      ? require("path").join(process.env.APPDATA, "dewicom-desktop")
+      : require("path").join(require("os").homedir(), ".config", "dewicom-desktop");
+    const configPath = require("path").join(userDataDir, "server-config.json");
+    const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+    if (config.origin && config.origin.startsWith("http://")) {
+      require("electron").app.commandLine.appendSwitch("unsafely-treat-insecure-origin-as-secure", config.origin);
+    }
+  } catch (e) { /* pas de config ou déjà HTTPS : silencieux */ }
+  require("electron").app.commandLine.appendSwitch("disable-features", "BlockInsecurePrivateNetworkRequests");
+})();
+
 // Évite le crash EPIPE quand stdout/stderr est un pipe cassé (AppImage lancée sans terminal)
 process.stdout.on("error", (e) => { if (e.code === "EPIPE") process.exit(0); });
 process.stderr.on("error", (e) => { if (e.code === "EPIPE") process.exit(0); });
@@ -69,6 +88,7 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, "preload.js"),
+      allowRunningInsecureContent: true,
     },
     icon: path.join(__dirname, "assets", "icon.png"),
   });
