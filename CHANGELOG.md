@@ -5,6 +5,21 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 
 ---
 
+## [1.3.3] — 2026-03-03
+
+### Corrigé
+- **Desktop — `superiorServerListener` absent au démarrage via `listenMulticast`** : quand un serveur dédié était trouvé au démarrage par multicast (bypass élection), le listener permanent n'était jamais lancé → le Docker arrivant après était invisible. Fix : `startSuperiorServerListener(prePriority - 1)` lancé dans tous les chemins — `main.js`
+- **Desktop `--server`/`--headless` — jamais de bascule vers Docker** : le mode serveur dédié ne lançait pas le `superiorServerListener`, ignorant complètement les annonces Docker. Fix : listener lancé après `startDedicatedServer()` avec seuil `minPriority=2` (cède uniquement aux docker) — `main.js`
+- **Desktop — conflit socket multicast port 9999** : `listenMulticast()` et `startSuperiorServerListener()` créaient chacun un socket UDP sur le même port. Sous Windows les paquets multicast étaient perdus. Fix : socket persistant unique partagé (`mcastSocket` + `mcastListeners`) — `main.js`
+- **Android — liste SSID vide dans le dialogue de sélection WiFi** : `getScanResults()` et `getConnectionInfo()` nécessitent `ACCESS_FINE_LOCATION` au runtime (Android 8.1+). Fix : demande groupée `RECORD_AUDIO` + `ACCESS_FINE_LOCATION` avant l'init WiFi — `MainActivity.java`
+
+### Ajouté
+- **Desktop — socket multicast persistant partagé** : un seul socket UDP bind sur 9999, tous les listeners (découverte + superior) s'y abonnent via callbacks. Élimine les conflits de port et la perte de paquets sous Windows — `main.js`
+- **Android — sélection WiFi dédié au démarrage** : dialogue de sélection du SSID DewiCom mémorisé en `SharedPreferences`. L'app se déconnecte (écran d'attente) si le WiFi change, et se reconnecte automatiquement au retour sur le réseau choisi — `MainActivity.java`, `AndroidManifest.xml`
+- **Monitoring — vue tableau de bord opérateur** : refonte complète de `monitor.html` — layout grand écran avec canaux + sidebar journal, barres de niveau audio animées (PTT), glow coloré par canal, stats avec animation pulse, bouton "Effacer journal" — `shared/public/monitor.html`
+
+---
+
 ## [1.3.2] — 2026-03-03
 
 ### Corrigé
