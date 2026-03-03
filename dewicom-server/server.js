@@ -125,6 +125,10 @@ app.get("/api/dewicom-discovery", (req, res) => {
   });
 });
 
+app.get("/monitor", (req, res) => {
+  res.sendFile(path.join(PUBLIC_DIR, "monitor.html"));
+});
+
 app.get("/api/status", (req, res) => {
   const connectedUsers = Array.from(users.values()).map(u => ({
     name: u.name,
@@ -168,8 +172,21 @@ function broadcastChannelState() {
   io.emit("channel-state", state);
 }
 
+function monitorState() {
+  return {
+    name: SERVER_NAME,
+    mode: SERVER_MODE,
+    version: VERSION,
+    uptime: Math.floor(process.uptime()),
+  };
+}
+
 io.on("connection", (socket) => {
   console.log(`[server] + ${socket.id}`);
+
+  socket.on("monitor-subscribe", () => {
+    socket.emit("monitor-state", monitorState());
+  });
 
   socket.emit("channels-init", Object.entries(channels).map(([id, ch]) => ({
     id, name: ch.name, color: ch.color,

@@ -131,7 +131,21 @@ function start(options = {}) {
 
     // ── Routes ──────────────────────────────────────────────────────────────
     expressApp.get("/api/dewicom-discovery", (req, res) => {
-      res.json({ service: "DewiCom", version: APP_VERSION, mode: "desktop-local" });
+      res.json({ service: "DewiCom", version: APP_VERSION, mode: options.mode || "desktop-local" });
+    });
+
+    expressApp.get("/monitor", (req, res) => {
+      res.sendFile(path.join(PUBLIC_DIR, "monitor.html"));
+    });
+
+    expressApp.get("/api/status", (req, res) => {
+      const connectedUsers = Array.from(users.values()).map(u => ({ name: u.name, channel: u.channel }));
+      res.json({
+        service: "DewiCom", version: APP_VERSION,
+        mode: options.mode || "desktop-local",
+        uptime: Math.floor(process.uptime()),
+        users: connectedUsers, userCount: users.size,
+      });
     });
 
     expressApp.get("/qr", async (req, res) => {
@@ -165,9 +179,22 @@ function start(options = {}) {
       io.emit("channel-state", state);
     }
 
+    function monitorState() {
+      return {
+        name: "Desktop",
+        mode: options.mode || "desktop-local",
+        version: APP_VERSION,
+        uptime: Math.floor(process.uptime()),
+      };
+    }
+
     // ── Socket.io (événements identiques au vrai serveur) ────────────────────
     io.on("connection", (socket) => {
       console.log(`[local-server] + ${socket.id}`);
+
+      socket.on("monitor-subscribe", () => {
+        socket.emit("monitor-state", monitorState());
+      });
 
       socket.emit("channels-init", Object.entries(channels).map(([id, ch]) => ({
         id, name: ch.name, color: ch.color,

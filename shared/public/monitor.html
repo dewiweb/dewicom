@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DewiCom — Monitoring</title>
+  <style>
+    :root {
+      --bg: #0d0d0d; --surface: #161616; --surface2: #1f1f1f; --border: #2a2a2a;
+      --text: #f0f0f0; --text2: #a0a0a0; --muted: #505050;
+      --green: #22c55e; --red: #ef4444; --amber: #f59e0b; --blue: #3b82f6;
+      --purple: #a855f7; --orange: #f97316;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: 'SF Pro Display', system-ui, sans-serif; min-height: 100vh; }
+
+    header {
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      padding: 16px 24px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    }
+    .logo { font-size: 1.1rem; font-weight: 900; letter-spacing: -0.5px; display: flex; align-items: center; gap: 10px; }
+    .logo-icon { width: 32px; height: 32px; background: var(--green); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: .9rem; flex-shrink: 0; }
+    .logo-sub { font-size: .65rem; color: var(--muted); text-transform: uppercase; letter-spacing: .15em; }
+    .header-meta { margin-left: auto; display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+    .meta-item { font-size: .75rem; color: var(--text2); }
+    .meta-item strong { color: var(--text); }
+
+    .status-dot {
+      display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+      background: var(--muted); margin-right: 6px; vertical-align: middle;
+      transition: background .3s;
+    }
+    .status-dot.connected { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .status-dot.disconnected { background: var(--red); }
+
+    main { padding: 24px; max-width: 1200px; margin: 0 auto; }
+
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 28px; }
+    .stat-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      padding: 18px 20px;
+    }
+    .stat-label { font-size: .65rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-bottom: 8px; }
+    .stat-value { font-size: 1.8rem; font-weight: 800; line-height: 1; }
+    .stat-sub { font-size: .75rem; color: var(--text2); margin-top: 6px; }
+
+    h2 { font-size: .8rem; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-bottom: 14px; }
+
+    .channels-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; margin-bottom: 28px; }
+    .channel-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      padding: 16px 18px; border-left: 3px solid var(--border);
+    }
+    .channel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .channel-name { font-size: .9rem; font-weight: 700; }
+    .channel-count {
+      background: var(--surface2); border: 1px solid var(--border); border-radius: 20px;
+      padding: 2px 10px; font-size: .7rem; font-weight: 700; color: var(--text2);
+    }
+    .channel-count.active { background: var(--green); color: #000; border-color: transparent; }
+    .user-list { display: flex; flex-direction: column; gap: 6px; min-height: 20px; }
+    .user-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 10px; background: var(--surface2); border-radius: 8px;
+      font-size: .8rem;
+    }
+    .user-avatar {
+      width: 24px; height: 24px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: .7rem; font-weight: 800; flex-shrink: 0;
+      background: var(--border);
+    }
+    .user-name { flex: 1; font-weight: 600; }
+    .ptt-badge {
+      font-size: .6rem; padding: 2px 6px; border-radius: 4px;
+      background: var(--red); color: #fff; font-weight: 700;
+      display: none;
+    }
+    .ptt-badge.speaking { display: inline-block; animation: pulse 1s infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+    .empty-channel { font-size: .75rem; color: var(--muted); text-align: center; padding: 8px 0; }
+
+    .events-box {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      padding: 16px 18px;
+    }
+    .events-list { list-style: none; display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow-y: auto; }
+    .event-row { display: flex; align-items: center; gap: 10px; font-size: .78rem; padding: 5px 8px; border-radius: 6px; }
+    .event-row:hover { background: var(--surface2); }
+    .event-time { color: var(--muted); font-size: .7rem; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+    .event-text { flex: 1; }
+    .event-join  .event-dot { color: var(--green); }
+    .event-leave .event-dot { color: var(--red); }
+    .event-ptt   .event-dot { color: var(--amber); }
+    .event-info  .event-dot { color: var(--blue); }
+
+    .no-connection {
+      position: fixed; inset: 0; background: rgba(0,0,0,.85);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 16px; z-index: 100; display: none;
+    }
+    .no-connection.visible { display: flex; }
+    .no-connection h3 { font-size: 1.2rem; }
+    .no-connection p { color: var(--text2); font-size: .85rem; }
+    .spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--green); border-radius: 50%; animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">📡</div>
+    <div>
+      <div>DewiCom</div>
+      <div class="logo-sub">Monitoring</div>
+    </div>
+  </div>
+  <div class="header-meta">
+    <div class="meta-item"><span class="status-dot" id="connDot"></span><span id="connLabel">Connexion...</span></div>
+    <div class="meta-item">Serveur : <strong id="serverName">—</strong></div>
+    <div class="meta-item">Mode : <strong id="serverMode">—</strong></div>
+    <div class="meta-item">Version : <strong id="serverVersion">—</strong></div>
+    <div class="meta-item">Uptime : <strong id="serverUptime">—</strong></div>
+  </div>
+</header>
+
+<main>
+  <div class="grid">
+    <div class="stat-card">
+      <div class="stat-label">Utilisateurs connectés</div>
+      <div class="stat-value" id="statUsers">0</div>
+      <div class="stat-sub">en temps réel</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Canaux actifs</div>
+      <div class="stat-value" id="statActiveChannels">0</div>
+      <div class="stat-sub">au moins 1 user</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Transmissions PTT</div>
+      <div class="stat-value" id="statPtt">0</div>
+      <div class="stat-sub">depuis démarrage</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Événements</div>
+      <div class="stat-value" id="statEvents">0</div>
+      <div class="stat-sub">connexions / départs</div>
+    </div>
+  </div>
+
+  <h2>Canaux</h2>
+  <div class="channels-grid" id="channelsGrid"></div>
+
+  <h2>Journal</h2>
+  <div class="events-box">
+    <ul class="events-list" id="eventsList"></ul>
+  </div>
+</main>
+
+<div class="no-connection" id="noConn">
+  <div class="spinner"></div>
+  <h3>Connexion au serveur perdue</h3>
+  <p>Reconnexion en cours...</p>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  // ── État local ────────────────────────────────────────────────────────────
+  let channelDefs   = {};   // { id: { name, color } }
+  let channelState  = {};   // { id: { users: [{id, name}] } }
+  let speakingUsers = new Set();
+  let pttCount      = 0;
+  let eventCount    = 0;
+  let startTime     = null;
+  let uptimeTimer   = null;
+
+  // ── Socket.io ─────────────────────────────────────────────────────────────
+  const socket = io({ reconnectionDelay: 1000, reconnectionDelayMax: 3000 });
+
+  socket.on("connect", () => {
+    setConnected(true);
+    addEvent("info", "Connecté au serveur");
+    socket.emit("monitor-subscribe");
+  });
+
+  socket.on("disconnect", () => {
+    setConnected(false);
+    addEvent("info", "Déconnecté du serveur");
+  });
+
+  socket.on("channels-init", (list) => {
+    channelDefs = {};
+    list.forEach(ch => { channelDefs[ch.id] = { name: ch.name, color: ch.color }; });
+    renderChannels();
+  });
+
+  socket.on("channel-state", (state) => {
+    channelState = state;
+    renderChannels();
+    updateStats();
+  });
+
+  socket.on("monitor-state", (data) => {
+    document.getElementById("serverName").textContent    = data.name    || "—";
+    document.getElementById("serverMode").textContent    = data.mode    || "—";
+    document.getElementById("serverVersion").textContent = data.version || "—";
+    startTime = Date.now() - (data.uptime * 1000);
+    updateUptime();
+    if (uptimeTimer) clearInterval(uptimeTimer);
+    uptimeTimer = setInterval(updateUptime, 1000);
+  });
+
+  socket.on("user-joined", ({ name, channel }) => {
+    eventCount++;
+    addEvent("join", `${name} a rejoint <em>${chanName(channel)}</em>`);
+    updateStats();
+  });
+
+  socket.on("user-left", ({ name, channel }) => {
+    eventCount++;
+    addEvent("leave", `${name} a quitté <em>${chanName(channel)}</em>`);
+    updateStats();
+  });
+
+  socket.on("ptt-state", ({ from, channel, speaking }) => {
+    if (speaking) {
+      speakingUsers.add(from);
+      pttCount++;
+      addEvent("ptt", `${from} parle sur <em>${chanName(channel)}</em>`);
+      document.getElementById("statPtt").textContent = pttCount;
+    } else {
+      speakingUsers.delete(from);
+    }
+    renderChannels();
+  });
+
+  // ── Rendu canaux ──────────────────────────────────────────────────────────
+  function chanName(id) {
+    return (channelDefs[id] && channelDefs[id].name) || id;
+  }
+
+  function renderChannels() {
+    const grid = document.getElementById("channelsGrid");
+    const allIds = Object.keys(Object.keys(channelDefs).length ? channelDefs : channelState);
+    if (!allIds.length) return;
+
+    const ids = Object.keys(channelDefs).length ? Object.keys(channelDefs) : Object.keys(channelState);
+    grid.innerHTML = ids.map(id => {
+      const def   = channelDefs[id]  || {};
+      const state = channelState[id] || {};
+      const users = state.users || [];
+      const color = def.color || "#6b7280";
+      const count = users.length;
+      return `
+        <div class="channel-card" style="border-left-color:${color}">
+          <div class="channel-header">
+            <div class="channel-name" style="color:${color}">${def.name || id}</div>
+            <div class="channel-count ${count > 0 ? 'active' : ''}">${count}</div>
+          </div>
+          <div class="user-list">
+            ${count === 0
+              ? `<div class="empty-channel">— vide —</div>`
+              : users.map(u => `
+                <div class="user-row">
+                  <div class="user-avatar" style="background:${color}22;color:${color}">${(u.name||'?')[0].toUpperCase()}</div>
+                  <div class="user-name">${u.name}</div>
+                  <span class="ptt-badge ${speakingUsers.has(u.name) ? 'speaking' : ''}">● PARLE</span>
+                </div>`).join('')
+            }
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  // ── Stats ─────────────────────────────────────────────────────────────────
+  function updateStats() {
+    let totalUsers = 0, activeChannels = 0;
+    for (const id in channelState) {
+      const u = (channelState[id].users || []).length;
+      totalUsers += u;
+      if (u > 0) activeChannels++;
+    }
+    document.getElementById("statUsers").textContent          = totalUsers;
+    document.getElementById("statActiveChannels").textContent = activeChannels;
+    document.getElementById("statEvents").textContent         = eventCount;
+  }
+
+  function updateUptime() {
+    if (!startTime) return;
+    const s = Math.floor((Date.now() - startTime) / 1000);
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    document.getElementById("serverUptime").textContent =
+      h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m ${sec}s` : `${sec}s`;
+  }
+
+  // ── Journal ───────────────────────────────────────────────────────────────
+  function addEvent(type, text) {
+    const list = document.getElementById("eventsList");
+    const now  = new Date();
+    const time = now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    const icons = { join: "●", leave: "●", ptt: "●", info: "●" };
+    const li = document.createElement("li");
+    li.className = `event-row event-${type}`;
+    li.innerHTML = `<span class="event-dot">${icons[type]}</span><span class="event-time">${time}</span><span class="event-text">${text}</span>`;
+    list.prepend(li);
+    // Limite à 100 entrées
+    while (list.children.length > 100) list.removeChild(list.lastChild);
+  }
+
+  // ── Connexion UI ─────────────────────────────────────────────────────────
+  function setConnected(ok) {
+    const dot   = document.getElementById("connDot");
+    const label = document.getElementById("connLabel");
+    const overlay = document.getElementById("noConn");
+    dot.className   = `status-dot ${ok ? "connected" : "disconnected"}`;
+    label.textContent = ok ? "Connecté" : "Déconnecté";
+    overlay.classList.toggle("visible", !ok);
+  }
+</script>
+</body>
+</html>
