@@ -37,17 +37,27 @@ jobs:
           npm_config_fetch_retry_maxtimeout: 120000
           npm_config_fetch_retries: 5
 
+      - name: Patch version depuis le tag git
+        run: |
+          TAG="${{ github.ref_name }}"
+          VERSION="${TAG#v}"
+          sed -i "s/\"version\": \".*\"/\"version\": \"${VERSION}\"/" package.json
+          echo "Desktop version: ${VERSION}"
+        working-directory: dewicom-desktop
+
       - name: Build AppImage
         run: npm run build:linux
         working-directory: dewicom-desktop
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload AppImage
+      - name: Upload AppImage + deb
         uses: actions/upload-artifact@v4
         with:
           name: electron-linux
-          path: dewicom-desktop/dist/*.AppImage
+          path: |
+            dewicom-desktop/dist/*.AppImage
+            dewicom-desktop/dist/*.deb
 
   # ── Electron Windows (EXE) ────────────────────────────────────────────────────
   electron-windows:
@@ -77,6 +87,17 @@ jobs:
           npm_config_fetch_retry_maxtimeout: 120000
           npm_config_fetch_retries: 5
 
+      - name: Patch version depuis le tag git
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = $tag -replace '^v', ''
+          $content = Get-Content package.json -Raw
+          $content = $content -replace '"version": "[^"]+"', "\"version\": \"$version\""
+          Set-Content package.json $content
+          Write-Host "Desktop version: $version"
+        working-directory: dewicom-desktop
+
       - name: Build EXE
         run: npm run build:win
         working-directory: dewicom-desktop
@@ -87,7 +108,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: electron-windows
-          path: dewicom-desktop/dist/*Setup*.exe
+          path: |
+            dewicom-desktop/dist/*.exe
+            dewicom-desktop/dist/*.msi
 
   # ── Android APK ───────────────────────────────────────────────────────────────
   android-apk:
