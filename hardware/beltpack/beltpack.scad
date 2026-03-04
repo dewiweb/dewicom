@@ -1,11 +1,17 @@
 // ============================================================
-// DewiCom Beltpack BP-1 — boîtier OpenSCAD  v2
-// Dimensions corrigées après audit volumétrique
+// DewiCom Beltpack BP-1 — boîtier OpenSCAD  v3
 //
-// Option A : 155×90×42mm — format beltpack pro standard
-//   → Stack RPi+HATs tient dans la profondeur
-//   → XLR5 coudé (NC5MPR) : empiètement 12mm seulement
-//   → LiPo 704050 côte à côte avec le stack RPi
+// ORIENTATION PORTRAIT — format beltpack pro (Clear-Com, RTS)
+//
+//   Axes :
+//     X = largeur  = 90mm  (petite dimension)
+//     Y = longueur = 155mm (grande dimension = profondeur du corps)
+//     Z = épaisseur= 42mm
+//
+//   Face avant  (Y = BOX_L) : Stream Deck Module 6 touches (84×55.5mm)
+//   Face arrière (Y = 0)    : XLR5 + RJ45 + USB-C (connectique)
+//   Face dos    (Z = 0)     : clip ceinture
+//   Face avant  (Z = BOX_D) : façade lisse avec touches LCD
 //
 // Fichier STP officiel Stream Deck Module 6t :
 //   https://res.cloudinary.com/elgato-pwa/raw/upload/v1747898289/
@@ -15,283 +21,304 @@
 // ── Paramètres globaux ───────────────────────────────────────
 $fn = 64;
 
-// Boîtier externe — Option A réaliste
-BOX_W  = 155;   // largeur  (axe X) mm
-BOX_H  =  90;   // hauteur  (axe Y) mm
-BOX_D  =  42;   // profondeur (axe Z) mm
+// Boîtier externe
+BOX_W  =  90;   // largeur  (axe X) — petite face mm
+BOX_L  = 155;   // longueur (axe Y) — grande dimension mm
+BOX_D  =  42;   // épaisseur (axe Z) mm
 WALL   =   2.5; // épaisseur paroi mm
 FILLET =   4;   // rayon arrondi mm
 
 // ── Stream Deck Module 6 touches ─────────────────────────────
-// Source dimensions : STP officiel Elgato + doc intégration
-SDM_W       = 84.0;  // largeur façade mm
-SDM_H       = 55.5;  // hauteur façade mm
-SDM_D       = 21.0;  // profondeur totale module mm
-SDM_KEY_W   = 25.0;  // largeur touche LCD mm
-SDM_KEY_H   = 25.0;  // hauteur touche LCD mm
-SDM_KEY_GAP =  3.0;  // espacement entre touches mm
-SDM_WIN_W   = (SDM_KEY_W * 3) + (SDM_KEY_GAP * 2); // 81mm zone visible
+// Monté sur la face avant (Y = BOX_L), centré en X et Z
+// Le module est orienté 3 colonnes × 2 lignes (landscape)
+SDM_W       = 84.0;  // dimension X (largeur) sur la face avant mm
+SDM_H       = 55.5;  // dimension Z (hauteur) sur la face avant mm
+SDM_D       = 21.0;  // profondeur du module (dans l'axe Y) mm
+SDM_KEY_W   = 25.0;
+SDM_KEY_H   = 25.0;
+SDM_KEY_GAP =  3.0;
+SDM_WIN_W   = (SDM_KEY_W * 3) + (SDM_KEY_GAP * 2); // 81mm
 SDM_WIN_H   = (SDM_KEY_H * 2) + (SDM_KEY_GAP * 1); // 53mm
 SDM_WIN_OX  = (SDM_W - SDM_WIN_W) / 2;
-SDM_WIN_OY  = (SDM_H - SDM_WIN_H) / 2;
-// Centré horizontalement, décalé en haut de la façade
+SDM_WIN_OZ  = (SDM_H - SDM_WIN_H) / 2;
+// Position sur la face avant (Y+) — centré en X, centré en Z
 SDM_X       = (BOX_W - SDM_W) / 2;
-SDM_Y       = BOX_H - WALL - SDM_H - 4; // 4mm marge haut
+SDM_Z       = (BOX_D - SDM_H) / 2;
 
-// ── Raspberry Pi Zero 2W ─────────────────────────────────────
-RPI_W = 65; RPI_H = 30; RPI_D = 5;
-RPI_X = WALL + 6;
-RPI_Y = WALL + 6;
-RPI_Z = WALL + 3; // surélevé sur entretoises 3mm
+// ── Composants internes (disposés sur axe Y, côté connecteurs) ─
+// Tous à plat dans XZ, empilés le long de Y depuis l'arrière
 
-// ── WM8960 Audio HAT (I2S) — empilé sur RPi ─────────────────
-// Header GPIO 11mm + PCB 3mm
-WM_W = 65; WM_H = 30; WM_D = 3;
-WM_Z = RPI_Z + RPI_D + 11; // 11mm header GPIO
+// RPi Zero 2W (65×30mm, plat dans XZ, axe long sur X)
+RPI_W = 65; RPI_H = 30; RPI_D = 5; // W=X, H=Y(profondeur sur carte), D=Z
+RPI_X = (BOX_W - RPI_W) / 2;       // centré en X
+RPI_Y = WALL + 10;                  // depuis face arrière (connecteurs)
+RPI_Z = WALL + 6;                   // surélevé entretoises
 
-// ── PoE HAT Waveshare mini — empilé sur WM8960 ──────────────
-// Header GPIO 11mm + PCB 3mm + régulateur ~8mm
-POE_W = 65; POE_H = 30; POE_D = 11;
-POE_Z = WM_Z + WM_D + 11;
-// Total stack : RPI_Z(5.5) + 5 + 11 + 3 + 11 + 11 = ~46mm
-// → rentre dans BOX_D=42mm uniquement si RPI_Z=3 et headers compacts 8mm
-// → on adopte FFC flat cable entre RPi et HATs (voir README)
+// WM8960 Audio HAT (65×30mm) — côte à côte avec RPi via FFC, même Z
+WM_W = 65; WM_H = 8; WM_D = 30;    // W=X, H=Y(épaisseur), D=Z
+WM_X = (BOX_W - WM_W) / 2;
+WM_Y = RPI_Y + RPI_H + 8;          // derrière RPi sur axe Y
+WM_Z = RPI_Z;
 
-// ── LiPo 704050 2000mAh (70×40×5mm) ─────────────────────────
-LIPO_W = 70; LIPO_H = 40; LIPO_D = 5;
-LIPO_X = WALL + 6;
-LIPO_Y = BOX_H - WALL - LIPO_H - 6;
+// PoE HAT Waveshare mini (65×30×11mm) — suite sur axe Y
+POE_W = 65; POE_H = 11; POE_D = 30;
+POE_X = (BOX_W - POE_W) / 2;
+POE_Y = WM_Y + WM_H + 8;
+POE_Z = RPI_Z;
+
+// LiPo 704050 (70×40×5mm) — couché à plat, Z bas
+LIPO_W = 70; LIPO_L = 40; LIPO_D = 5;
+LIPO_X = (BOX_W - LIPO_W) / 2;
+LIPO_Y = POE_Y + POE_H + 8;
 LIPO_Z = WALL + 2;
 
-// ── BMS TP5100 (40×20×6mm) ───────────────────────────────────
-BMS_W = 40; BMS_H = 20; BMS_D = 6;
-BMS_X = WALL + 80;
-BMS_Y = WALL + 6;
+// BMS TP5100 (40×20×6mm)
+BMS_W = 40; BMS_L = 20; BMS_D = 6;
+BMS_X = (BOX_W - BMS_W) / 2;
+BMS_Y = LIPO_Y + LIPO_L + 6;
 BMS_Z = WALL + 2;
 
-// ── Connecteurs face inférieure ───────────────────────────────
-// XLR5 coudé Neutrik NC5MPR : empiètement 12mm (vs 35mm traversant)
-XLR5_D_HOLE = 24;   // diamètre trou mm
-XLR5_X = 22;
-XLR5_Y = BOX_H / 2;
+// ── Connecteurs face arrière (Y = 0) ─────────────────────────
+// Face 90mm (X) × 42mm (Z) — même layout que beltpack pro
+// XLR5 coudé NC5MPR — à gauche, centré en Z
+XLR5_D_HOLE = 24;
+XLR5_X      = BOX_W * 0.25;        // 1/4 de la largeur
+XLR5_Z      = BOX_D / 2;           // centré en Z
 
-// RJ45 (16.5×14mm)
-RJ45_W = 16.5; RJ45_H = 14;
-RJ45_X = 62;
-RJ45_Y = (BOX_H - RJ45_H) / 2;
+// RJ45 (16.5×14mm) — milieu
+RJ45_W = 16.5; RJ45_D = 14;
+RJ45_X = (BOX_W - RJ45_W) / 2;     // centré en X
+RJ45_Z = (BOX_D - RJ45_D) / 2;     // centré en Z
 
-// USB-C (9.5×3.5mm)
-USBC_W = 9.5; USBC_H = 3.5;
-USBC_X = 108;
-USBC_Y = (BOX_H - USBC_H) / 2;
+// USB-C (9.5×3.5mm) — à droite
+USBC_W = 9.5; USBC_D = 3.5;
+USBC_X = BOX_W * 0.72;
+USBC_Z = (BOX_D - USBC_D) / 2;
 
-// ── Clip ceinture ─────────────────────────────────────────────
-CLIP_H      = 70;
-CLIP_D      =  5;
-CLIP_SLOT_W = 50; // max 50mm courroie standard
+// ── Clip ceinture (sur le dos, face Z = 0) ───────────────────
+CLIP_L      = 80;   // longueur clip (axe Y)
+CLIP_D_T    =  5;   // épaisseur lame
+CLIP_SLOT_W = 50;   // max ceinture 50mm (axe Y)
 
 // ── Modules utilitaires ──────────────────────────────────────
 
-module rounded_box(w, h, d, r) {
-    hull() {
-        for (x = [r, w-r]) for (y = [r, h-r])
+// Boîte arrondie dans le plan XY, extrudée en Z
+module rbox(w, l, d, r) {
+    hull()
+        for (x=[r, w-r]) for (y=[r, l-r])
             translate([x, y, 0]) cylinder(r=r, h=d);
-    }
 }
 
-module rounded_slot(w, h, d) {
-    // Rectangle aux extrémités arrondies (pour USB-C, jack)
-    r = h / 2;
+// Slot arrondi sur les petits côtés (USB-C, jack)
+module rslot(w, d_z, len) {
+    r = d_z / 2;
     hull() {
-        translate([r, r, 0])       cylinder(r=r, h=d);
-        translate([w-r, r, 0])     cylinder(r=r, h=d);
+        translate([r,   0, r]) rotate([-90,0,0]) cylinder(r=r, h=len);
+        translate([w-r, 0, r]) rotate([-90,0,0]) cylinder(r=r, h=len);
     }
 }
 
-module rounded_box_hollow(w, h, d, r, wall) {
+// Corps creux avec parois uniformes
+module rbox_hollow(w, l, d, r, wall) {
     difference() {
-        rounded_box(w, h, d, r);
+        rbox(w, l, d, r);
         translate([wall, wall, wall])
-            rounded_box(w-wall*2, h-wall*2, d, r);
+            rbox(w-wall*2, l-wall*2, d, r);
     }
 }
 
 // ── Corps principal ───────────────────────────────────────────
+// X = largeur 90mm  |  Y = longueur 155mm  |  Z = épaisseur 42mm
+// Face avant  Y = BOX_L : Stream Deck Module
+// Face arrière Y = 0    : connecteurs XLR5 / RJ45 / USB-C
+// Face dos Z = 0 (dessous) : clip ceinture
 
 module corps() {
     color("DimGray", 0.85)
     difference() {
-        rounded_box_hollow(BOX_W, BOX_H, BOX_D, FILLET, WALL);
+        rbox_hollow(BOX_W, BOX_L, BOX_D, FILLET, WALL);
 
-        // ── Façade (Z+) : ouverture LCD Stream Deck ──────────
-        // Logement encastré pour le module (poche intérieure)
-        translate([SDM_X, SDM_Y, BOX_D - SDM_D])
-            cube([SDM_W, SDM_H, SDM_D + 0.1]);
-        // Fenêtre visible (façade percée)
-        translate([SDM_X + SDM_WIN_OX, SDM_Y + SDM_WIN_OY, BOX_D - WALL - 0.01])
-            cube([SDM_WIN_W, SDM_WIN_H, WALL + 0.02]);
+        // ── FACE AVANT (Y = BOX_L) : Stream Deck Module ──────
+        // Poche intérieure pour loger le module (profondeur SDM_D)
+        translate([SDM_X, BOX_L - SDM_D, SDM_Z])
+            cube([SDM_W, SDM_D + 0.1, SDM_H]);
+        // Ouverture LCD (fenêtre percée dans la paroi)
+        translate([SDM_X + SDM_WIN_OX, BOX_L - WALL - 0.01, SDM_Z + SDM_WIN_OZ])
+            cube([SDM_WIN_W, WALL + 0.02, SDM_WIN_H]);
 
-        // ── Face inférieure (Z-) : connecteurs ───────────────
+        // ── FACE ARRIÈRE (Y = 0) : connecteurs ───────────────
         // XLR5 coudé NC5MPR — cercle Ø24
-        translate([XLR5_X, XLR5_Y, -0.01])
-            cylinder(d=XLR5_D_HOLE, h=WALL + 0.02);
-        // RJ45 — rectangle 16.5×14
-        translate([RJ45_X, RJ45_Y, -0.01])
-            cube([RJ45_W, RJ45_H, WALL + 0.02]);
+        translate([XLR5_X, -0.01, XLR5_Z])
+            rotate([-90, 0, 0]) cylinder(d=XLR5_D_HOLE, h=WALL + 0.02);
+        // RJ45 — rectangle 16.5 (X) × 14 (Z)
+        translate([RJ45_X, -0.01, RJ45_Z])
+            cube([RJ45_W, WALL + 0.02, RJ45_D]);
         // USB-C — slot arrondi 9.5×3.5
-        translate([USBC_X, USBC_Y, -0.01])
-            rounded_slot(USBC_W, USBC_H, WALL + 0.02);
+        translate([USBC_X, -0.01, USBC_Z])
+            rslot(USBC_W, USBC_D, WALL + 0.02);
+        // Étiquettes gravées (face arrière extérieure)
+        translate([XLR5_X - 7, -1.2, 2])
+            rotate([90, 0, 0]) linear_extrude(1.2)
+            text("XLR5", size=3, font="Liberation Mono:style=Bold");
+        translate([RJ45_X, -1.2, 2])
+            rotate([90, 0, 0]) linear_extrude(1.2)
+            text("PoE", size=3, font="Liberation Mono:style=Bold");
+        translate([USBC_X - 2, -1.2, 2])
+            rotate([90, 0, 0]) linear_extrude(1.2)
+            text("USB-C", size=3, font="Liberation Mono:style=Bold");
 
-        // ── Grille de ventilation (face dos Z-) ──────────────
-        for (ix = [0:5]) for (iy = [0:4])
-            translate([BOX_W*0.58 + ix*7, BOX_H*0.15 + iy*13, -0.01])
-                cylinder(d=2.8, h=WALL + 0.02);
+        // ── Grille ventilation face dos (Z = 0) ──────────────
+        for (ix=[0:4]) for (iy=[0:6])
+            translate([BOX_W*0.15 + ix*13, BOX_L*0.15 + iy*18, -0.01])
+                cylinder(d=3, h=WALL + 0.02);
 
-        // ── Trous de vis M3 fermeture couvercle (4 coins) ────
-        for (x = [9, BOX_W-9]) for (y = [9, BOX_H-9])
+        // ── Trous vis M3 couvercle (face dos) — 4 coins ──────
+        for (x=[9, BOX_W-9]) for (y=[10, BOX_L-10])
             translate([x, y, -0.01]) cylinder(d=3.4, h=WALL + 0.02);
 
-        // ── Trous de vis M3 clip ceinture (côté droit) ───────
-        for (y = [BOX_H*0.3, BOX_H*0.7])
-            translate([BOX_W - WALL - 0.01, y, BOX_D/2])
-                rotate([0, 90, 0]) cylinder(d=3.4, h=WALL + 0.02);
-
-        // ── Étiquettes gravées face inférieure ────────────────
-        translate([XLR5_X - 7, 0.5, 0.8])
-            linear_extrude(height=0.8)
-            text("XLR5", size=3, font="Liberation Mono:style=Bold");
-        translate([RJ45_X + 1, 0.5, 0.8])
-            linear_extrude(height=0.8)
-            text("PoE", size=3, font="Liberation Mono:style=Bold");
-        translate([USBC_X, 0.5, 0.8])
-            linear_extrude(height=0.8)
-            text("USB-C", size=3, font="Liberation Mono:style=Bold");
+        // ── Trous vis M3 clip ceinture (face dos, centre long) ─
+        for (y=[BOX_L*0.35, BOX_L*0.65])
+            translate([BOX_W/2, y, -0.01]) cylinder(d=3.4, h=WALL + 0.02);
     }
 }
 
-// ── Couvercle (face Z-) ──────────────────────────────────────
+// ── Couvercle (face dos Z = 0) ───────────────────────────────
 
 module couvercle() {
     color("SlateGray", 0.92)
     translate([0, 0, -WALL])
     difference() {
-        rounded_box(BOX_W, BOX_H, WALL, FILLET);
-        // Trous de vis M3
-        for (x = [9, BOX_W-9]) for (y = [9, BOX_H-9])
+        rbox(BOX_W, BOX_L, WALL, FILLET);
+        // Trous vis M3
+        for (x=[9, BOX_W-9]) for (y=[10, BOX_L-10])
             translate([x, y, -0.01]) cylinder(d=3.0, h=WALL + 0.02);
-        // Gravure logo
-        translate([12, BOX_H*0.38, WALL - 0.6])
-            linear_extrude(height=0.7)
-            text("DewiCom  BP-1", size=5.5,
+        // Trous clip ceinture
+        for (y=[BOX_L*0.35, BOX_L*0.65])
+            translate([BOX_W/2, y, -0.01]) cylinder(d=3.0, h=WALL + 0.02);
+        // Gravure "DewiCom BP-1"
+        translate([BOX_W*0.1, BOX_L*0.42, WALL - 0.6])
+            linear_extrude(0.7)
+            text("DewiCom BP-1", size=5.5,
                  font="Liberation Sans:style=Bold", halign="left");
-        // Gravure dimensions (info intégrateur)
-        translate([12, BOX_H*0.22, WALL - 0.6])
-            linear_extrude(height=0.7)
-            text("155 x 90 x 42 mm", size=3.5,
+        translate([BOX_W*0.1, BOX_L*0.35, WALL - 0.6])
+            linear_extrude(0.7)
+            text("90x155x42 mm", size=3.5,
                  font="Liberation Mono", halign="left");
     }
 }
 
-// ── Clip ceinture (côté droit du boîtier) ────────────────────
+// ── Clip ceinture (collé sur le dos Z=0, centré) ─────────────
 
 module clip_ceinture() {
-    PATTE_H = 28; // hauteur zone fixation sur boîtier
-    PATTE_W = 10;
+    PATTE_L = 40;  // longueur patte vissée (axe Y)
+    PATTE_W = 10;  // profondeur patte (axe X recouvert)
+    PATTE_D = 10;  // épaisseur totale clip (axe Z)
     color("Black", 0.92)
-    translate([BOX_W + 1, (BOX_H - CLIP_H) / 2, (BOX_D - 12) / 2]) {
+    translate([(BOX_W - PATTE_L) / 2, (BOX_L - PATTE_L) / 2, -WALL - PATTE_D]) {
         difference() {
             union() {
-                // Lame du clip
-                cube([CLIP_D, CLIP_H, 12]);
                 // Patte vissée sur le boîtier
-                translate([-PATTE_W, (CLIP_H - PATTE_H) / 2, 0])
-                    cube([PATTE_W + CLIP_D, PATTE_H, 12]);
+                cube([PATTE_L, PATTE_L, PATTE_D]);
+                // Lame du clip qui dépasse sous le boîtier
+                translate([(PATTE_L - CLIP_SLOT_W) / 2, -CLIP_D_T, 0])
+                    cube([CLIP_SLOT_W, CLIP_D_T, PATTE_D]);
             }
-            // Fente passage ceinture / courroie 50mm
-            translate([-0.01, (CLIP_H - CLIP_SLOT_W) / 2, 2.5])
-                cube([CLIP_D + 0.02, CLIP_SLOT_W, 7]);
-            // Trous de vis M3 dans la patte
-            for (y = [CLIP_H*0.25, CLIP_H*0.75])
-                translate([-PATTE_W - 0.01, y, 6])
-                    rotate([0, 90, 0]) cylinder(d=3.2, h=PATTE_W + 0.02);
+            // Fente pour la ceinture / courroie
+            translate([(PATTE_L - CLIP_SLOT_W) / 2 - 0.01,
+                        -CLIP_D_T - 0.01, PATTE_D * 0.2])
+                cube([CLIP_SLOT_W + 0.02, CLIP_D_T + 0.02, PATTE_D * 0.6]);
+            // Trous de vis M3
+            for (x=[PATTE_L/2 - 10, PATTE_L/2 + 10])
+                for (y=[PATTE_L/2 - 10, PATTE_L/2 + 10])
+                    translate([x, y, -0.01]) cylinder(d=3.2, h=PATTE_D + 0.02);
         }
     }
 }
 
-// ── Internals (visualisation composants) ─────────────────────
+// ── Internals (visualisation composants en transparence) ──────
 
 module internals() {
-    // ── RPi Zero 2W (vert) ───────────────────────────────────
+    // RPi Zero 2W — PCB vert, plat dans plan XY
     color("Green", 0.75)
     translate([RPI_X, RPI_Y, RPI_Z]) cube([RPI_W, RPI_H, RPI_D]);
 
-    // Entretoises RPi (4 coins)
-    color("Silver") for (ex=[RPI_X+3, RPI_X+RPI_W-3]) for (ey=[RPI_Y+3, RPI_Y+RPI_H-3])
-        translate([ex, ey, WALL]) cylinder(d=2.5, h=3);
+    // Entretoises M2.5 aux 4 coins du RPi
+    color("Silver", 0.9)
+    for (ex=[RPI_X+3.5, RPI_X+RPI_W-3.5])
+        for (ey=[RPI_Y+3.5, RPI_Y+RPI_H-3.5])
+            translate([ex, ey, WALL]) cylinder(d=2.5, h=RPI_Z - WALL);
 
-    // ── WM8960 Audio HAT — côté RPi, relié par FFC ───────────
-    // Positionné côte à côte (pas empilé) pour économiser la hauteur
+    // WM8960 Audio HAT — derrière le RPi sur Y
     color("DarkGreen", 0.7)
-    translate([RPI_X + RPI_W + 5, RPI_Y, WALL + 2]) cube([WM_W, WM_H, WM_D]);
+    translate([WM_X, WM_Y, WM_Z]) cube([WM_W, WM_H, WM_D]);
 
-    // ── PoE HAT — côté opposé, bas du boîtier ────────────────
+    // PoE HAT Waveshare mini
     color("DarkOrange", 0.7)
-    translate([BMS_X, BMS_Y, BMS_Z]) cube([POE_W, POE_H, POE_D]);
+    translate([POE_X, POE_Y, POE_Z]) cube([POE_W, POE_H, POE_D]);
 
-    // ── BMS TP5100 ────────────────────────────────────────────
-    color("Chocolate", 0.8)
-    translate([BMS_X + POE_W + 4, BMS_Y, BMS_Z]) cube([BMS_W, BMS_H, BMS_D]);
-
-    // ── LiPo 704050 (bleu) ────────────────────────────────────
+    // LiPo 704050
     color("SteelBlue", 0.75)
-    translate([LIPO_X, LIPO_Y, LIPO_Z]) cube([LIPO_W, LIPO_H, LIPO_D]);
+    translate([LIPO_X, LIPO_Y, LIPO_Z]) cube([LIPO_W, LIPO_L, LIPO_D]);
 
-    // ── Stream Deck Module 6t (gris clair) ───────────────────
+    // BMS TP5100
+    color("Chocolate", 0.8)
+    translate([BMS_X, BMS_Y, BMS_Z]) cube([BMS_W, BMS_L, BMS_D]);
+
+    // Câble FFC entre RPi et WM8960 (ruban doré)
+    color("Gold", 0.6)
+    translate([RPI_X + RPI_W/2 - 2, RPI_Y + RPI_H, RPI_Z + 1])
+        cube([4, WM_Y - RPI_Y - RPI_H, 0.5]);
+
+    // Stream Deck Module 6t — encastré en face avant
     color("Gainsboro", 0.85)
-    translate([SDM_X, SDM_Y, BOX_D - SDM_D])
-        cube([SDM_W, SDM_H, SDM_D]);
+    translate([SDM_X, BOX_L - SDM_D, SDM_Z]) cube([SDM_W, SDM_D, SDM_H]);
 
-    // Touches LCD allumées (cyan)
-    for (col = [0:2]) for (row = [0:1])
+    // Touches LCD (3 col × 2 lignes) — surface avant
+    for (col=[0:2]) for (row=[0:1])
         color("LightCyan", 0.95)
         translate([
             SDM_X + SDM_WIN_OX + col*(SDM_KEY_W + SDM_KEY_GAP),
-            SDM_Y + SDM_WIN_OY + row*(SDM_KEY_H + SDM_KEY_GAP),
-            BOX_D - 0.4
+            BOX_L - 0.5,
+            SDM_Z + SDM_WIN_OZ + row*(SDM_KEY_H + SDM_KEY_GAP)
         ])
-        cube([SDM_KEY_W, SDM_KEY_H, 0.8]);
+        cube([SDM_KEY_W, 0.8, SDM_KEY_H]);
 
-    // ── XLR5 coudé NC5MPR (empiètement 12mm) ─────────────────
-    color("Silver", 0.9)
-    translate([XLR5_X - XLR5_D_HOLE/2, XLR5_Y - XLR5_D_HOLE/2, -12])
-        cube([XLR5_D_HOLE, XLR5_D_HOLE, 12]);
+    // XLR5 coudé NC5MPR — corps visible depuis l'extérieur
+    color("Silver", 0.85)
+    translate([XLR5_X - XLR5_D_HOLE/2, -15, XLR5_Z - XLR5_D_HOLE/2])
+        cube([XLR5_D_HOLE, 15, XLR5_D_HOLE]);
 
-    // ── Câblage FFC RPi ↔ HATs (représenté en ruban plat) ────
-    color("Gold", 0.6)
-    translate([RPI_X + RPI_W, RPI_Y + RPI_H/2 - 2, WALL + 4])
-        cube([5, 4, 0.3]);
+    // RJ45 — corps
+    color("Ivory", 0.85)
+    translate([RJ45_X, -16, RJ45_Z]) cube([RJ45_W, 16, RJ45_D]);
 }
 
-// ── Annotations (plans 2D projetés) ──────────────────────────
+// ── Annotations ───────────────────────────────────────────────
 
 module annotations() {
     color("White", 0.9) {
-        // Cote largeur
-        translate([0, -12, 0]) {
+        // Cote X (90mm)
+        translate([0, -14, 0]) {
             cube([BOX_W, 0.3, 0.3]);
-            translate([BOX_W/2 - 8, -5, 0])
+            translate([BOX_W/2 - 7, -5, 0])
+                linear_extrude(1) text("90mm", size=4);
+        }
+        // Cote Y (155mm)
+        translate([-14, 0, 0]) {
+            cube([0.3, BOX_L, 0.3]);
+            translate([-2, BOX_L/2 - 8, 0]) rotate([0,0,90])
                 linear_extrude(1) text("155mm", size=4);
         }
-        // Cote hauteur
-        translate([-14, 0, 0]) {
-            cube([0.3, BOX_H, 0.3]);
-            translate([-2, BOX_H/2, 0]) rotate([0,0,90])
-                linear_extrude(1) text("90mm", size=4);
+        // Cote Z (42mm)
+        translate([BOX_W + 2, 0, 0]) {
+            cube([0.3, 0.3, BOX_D]);
+            translate([2, 0, BOX_D/2])
+                linear_extrude(1) text("42mm", size=4);
         }
     }
 }
 
-// ── Assemblage principal ──────────────────────────────────────
+// ── Assemblage ────────────────────────────────────────────────
 
 corps();
 couvercle();
@@ -299,7 +326,7 @@ clip_ceinture();
 internals();
 annotations();
 
-// ── Vue éclatée (décommenter pour impression / export pièces) ─
-// translate([0, 0,  60]) couvercle();
+// ── Vue éclatée (décommenter pour export pièces séparées) ─────
+// translate([0, 0, -50]) couvercle();
 // translate([0, 0,   0]) corps();
-// translate([BOX_W + 30, 0, 0]) clip_ceinture();
+// translate([0, 0, -80]) clip_ceinture();
