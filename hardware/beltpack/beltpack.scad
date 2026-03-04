@@ -347,15 +347,25 @@ module annotations() {
 }
 
 // ── Assemblage / Vue éclatée ──────────────────────────────────
-// EXPLODE = 0  → assemblage normal
-// EXPLODE = 30 → vue éclatée
+// EXPLODE     = 0   → assemblage normal
+// EXPLODE     = 100 → vue éclatée
+// XRAY        = 0   → corps opaque
+// XRAY        = 1   → corps transparent (voir composants internes)
 
-EXPLODE = 30; // ← modifier ici
+EXPLODE = 100; // ← distance éclatement mm
+XRAY    =   1; // ← 1 = transparence corps (F6 requis, pas F5)
+
+module corps_display() {
+    if (XRAY)
+        %corps();   // % = transparent en prévisualisation F5
+    else
+        corps();
+}
 
 translate([0, 0, -EXPLODE - WALL])
     couvercle();
 
-corps();
+corps_display();
 internals();
 
 translate([0, EXPLODE, 0])
