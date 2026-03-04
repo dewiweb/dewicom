@@ -5,6 +5,13 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 
 ---
 
+## [1.4.1] — 2026-03-04
+
+### Corrigé
+- **HTTPS — `ERR_SSL_VERSION_OR_CIPHER_MISMATCH` dans les navigateurs** : le certificat auto-signé était généré avec `keySize: 2048` (option invalide en `selfsigned` v5, ignorée → clé trop courte) et sans `subjectAltName` (requis par tous les navigateurs modernes). Fix : retrait de `keySize`, ajout des extensions `subjectAltName`, `basicConstraints`, `keyUsage`, `extKeyUsage` — `dewicom-server/server.js`, `dewicom-desktop/local-server.js`
+
+---
+
 ## [1.4.0] — 2026-03-04
 
 ### Ajouté
