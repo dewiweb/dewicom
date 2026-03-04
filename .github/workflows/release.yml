@@ -122,6 +122,17 @@ jobs:
             echo "Pas de keystore — build debug"
           fi
 
+      - name: Patch versionName + versionCode depuis le tag git
+        run: |
+          TAG="${{ github.ref_name }}"
+          VERSION="${TAG#v}"                          # ex: 1.4.1
+          # versionCode = somme des parties * poids (ex: 1.4.1 → 10401)
+          IFS='.' read -r MA MI PA <<< "$VERSION"
+          CODE=$(( MA * 10000 + MI * 100 + ${PA:-0} ))
+          sed -i "s/versionName \".*\"/versionName \"${VERSION}\"/" dewicom-mobile/app/build.gradle
+          sed -i "s/versionCode [0-9]*/versionCode ${CODE}/" dewicom-mobile/app/build.gradle
+          echo "APK version: ${VERSION} (code ${CODE})"
+
       - name: Build APK
         run: chmod +x dewicom-mobile/gradlew && cd dewicom-mobile && ./gradlew assembleRelease --no-daemon
 
