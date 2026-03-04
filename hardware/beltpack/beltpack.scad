@@ -4,7 +4,7 @@
 // ORIENTATION BELTPACK PRO — posé à plat, porté à la ceinture
 //
 //   X = largeur   =  90mm
-//   Y = épaisseur =  42mm  (avant → arrière)
+//   Y = épaisseur =  62mm  (avant → arrière, contraint par SDM_Y_DIM=55.5mm)
 //   Z = hauteur   = 155mm  (bas → haut)
 //
 //   Dessus  Z+ : Stream Deck Module 6 touches (84×55mm) dans plan XY
@@ -21,7 +21,7 @@ $fn = 64;
 
 // ── Boîtier ──────────────────────────────────────────────────
 BOX_W  =  90;   // largeur  X mm
-BOX_Y  =  42;   // épaisseur Y mm (avant-arrière)
+BOX_Y  =  62;   // épaisseur Y mm — min 60.5mm (SDM_Y_DIM=55.5 + 2×WALL)
 BOX_H  = 155;   // hauteur  Z mm
 WALL   =   2.5;
 FILLET =   4;
