@@ -90,11 +90,12 @@ jobs:
       - name: Patch version depuis le tag git
         shell: pwsh
         run: |
-          $tag = "${{ github.ref_name }}"
+          $tag = '${{ github.ref_name }}'
           $version = $tag -replace '^v', ''
           $content = Get-Content package.json -Raw
-          $content = $content -replace '"version": "[^"]+"', "\"version\": \"$version\""
-          Set-Content package.json $content
+          $replacement = '"version": "' + $version + '"'
+          $content = $content -replace '"version": "[^"]+"', $replacement
+          Set-Content package.json $content -NoNewline
           Write-Host "Desktop version: $version"
         working-directory: dewicom-desktop
 
