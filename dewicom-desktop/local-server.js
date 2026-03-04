@@ -162,7 +162,19 @@ function start(options = {}) {
       if (!selfSigned) selfSigned = require("selfsigned");
       tlsCreds = selfSigned.generate(
         [{ name: "commonName", value: "DewiCom-Desktop" }],
-        { days: 3650, algorithm: "sha256", keySize: 2048 }
+        {
+          days: 3650,
+          algorithm: "sha256",
+          extensions: [
+            { name: "subjectAltName", altNames: [
+              { type: 2, value: "dewicom.local" },
+              { type: 7, ip: "0.0.0.0" },
+            ]},
+            { name: "basicConstraints", cA: false },
+            { name: "keyUsage", keyCertSign: false, digitalSignature: true, keyEncipherment: true },
+            { name: "extKeyUsage", serverAuth: true },
+          ],
+        }
       );
       console.log("[local-server] Certificat TLS auto-signé généré");
     } catch (e) {

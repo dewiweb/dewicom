@@ -49,7 +49,19 @@ const PUBLIC_DIR = (() => {
 // et par l'APK Android (SSLConfigurator + onReceivedSslError).
 // Pour les navigateurs desktop : acceptation manuelle une seule fois.
 const TLS_ATTRS = [{ name: "commonName", value: "DewiCom" }];
-const TLS_OPTS  = { days: 3650, algorithm: "sha256", keySize: 2048 };
+const TLS_OPTS  = {
+  days: 3650,
+  algorithm: "sha256",
+  extensions: [
+    { name: "subjectAltName", altNames: [
+      { type: 2, value: "dewicom.local" },   // DNS
+      { type: 7, ip: "0.0.0.0" },            // IP générique
+    ]},
+    { name: "basicConstraints", cA: false },
+    { name: "keyUsage", keyCertSign: false, digitalSignature: true, keyEncipherment: true },
+    { name: "extKeyUsage", serverAuth: true },
+  ],
+};
 const tlsPems   = selfsigned.generate(TLS_ATTRS, TLS_OPTS);
 console.log("[server] Certificat TLS auto-signé généré (valide 10 ans)");
 
