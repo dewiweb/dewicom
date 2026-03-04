@@ -346,15 +346,17 @@ module annotations() {
     }
 }
 
-// ── Assemblage ────────────────────────────────────────────────
+// ── Assemblage / Vue éclatée ──────────────────────────────────
+// EXPLODE = 0  → assemblage normal
+// EXPLODE = 30 → vue éclatée
+
+EXPLODE = 30; // ← modifier ici
+
+translate([0, 0, -EXPLODE - WALL])
+    couvercle();
 
 corps();
-couvercle();
-clip_ceinture();
 internals();
-annotations();
 
-// ── Vue éclatée (décommenter pour export pièces séparées) ─────
-// translate([0, BOX_Y + 20, 0]) couvercle();
-// translate([0, 0, 0])          corps();
-// translate([0, BOX_Y + 30, 0]) clip_ceinture();
+translate([0, EXPLODE, 0])
+    clip_ceinture();
