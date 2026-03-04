@@ -5,6 +5,13 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 
 ---
 
+## [1.4.3] — 2026-03-04
+
+### Ajouté
+- **APK — mode serveur explicite** : bouton "Mode serveur" dans le dialogue de connexion. L'utilisateur peut démarrer l'APK comme serveur HTTPS sans dépendre d'un Docker ou Desktop sur le LAN — permet un réseau intercom minimaliste entre plusieurs APKs. Le serveur génère un certificat TLS self-signed via `KeyPairGenerator` + `sun.security.x509` (API Android native). L'annonce multicast indique `protocol: "https"` quand HTTPS est actif. Le serveur est arrêté proprement dans `onDestroy` — `dewicom-mobile/…/LocalWebServer.java`, `MainActivity.java`
+
+---
+
 ## [1.4.2] — 2026-03-04
 
 ### Corrigé
