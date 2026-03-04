@@ -179,6 +179,79 @@ header {
 @keyframes bar3 { 0%,100% { height: 8px; } 50% { height: 12px; } }
 .empty-channel { font-size: .72rem; color: var(--muted); padding: 4px 0; text-align: center; }
 
+/* ── Matrice ── */
+.matrix-area {
+  padding: 16px; flex: 1; display: flex; flex-direction: column; gap: 10px; overflow: hidden;
+}
+.matrix-hint { font-size: .65rem; color: var(--muted); }
+.matrix-scroll { flex: 1; overflow: auto; }
+.matrix-table {
+  border-collapse: collapse; min-width: 100%;
+  font-size: .78rem;
+}
+.matrix-th-user { width: 160px; min-width: 140px; padding: 8px 10px; }
+.matrix-th-chan {
+  text-align: center; padding: 8px 6px; min-width: 80px;
+  border-left: 1px solid var(--border);
+}
+.matrix-ch-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--ch-color, #6b7280);
+  margin: 0 auto 4px;
+  box-shadow: 0 0 6px color-mix(in srgb, var(--ch-color, #6b7280) 50%, transparent);
+}
+.matrix-ch-label {
+  font-size: .65rem; font-weight: 700; color: var(--text2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80px;
+}
+.matrix-td-user {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px; white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+}
+.matrix-user-avatar {
+  width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .65rem; font-weight: 900;
+  background: var(--surface3); color: var(--text2);
+  transition: box-shadow .2s;
+}
+.matrix-user-avatar.speaking {
+  background: color-mix(in srgb, var(--green) 20%, var(--surface3));
+  color: var(--green);
+  box-shadow: 0 0 0 2px var(--green);
+  animation: avatarpulse 1s ease-in-out infinite;
+}
+.matrix-user-name { font-weight: 600; flex: 1; }
+.matrix-ptt-badge {
+  font-size: .55rem; font-weight: 900; padding: 1px 5px; border-radius: 6px;
+  background: var(--amber); color: #000; flex-shrink: 0;
+}
+.matrix-cell {
+  text-align: center; padding: 6px 4px;
+  border-left: 1px solid var(--border); border-bottom: 1px solid var(--border);
+  font-size: 1rem; transition: background .2s;
+}
+.matrix-cell-empty { background: var(--surface); }
+.matrix-cell-active {
+  background: color-mix(in srgb, var(--ch-color, #6b7280) 12%, var(--surface));
+  color: var(--ch-color, #6b7280);
+  font-size: .9rem;
+}
+.matrix-cell-speaking {
+  background: color-mix(in srgb, var(--ch-color, var(--green)) 25%, var(--surface));
+  animation: matcellpulse 1s ease-in-out infinite;
+}
+@keyframes matcellpulse {
+  0%,100% { background: color-mix(in srgb, var(--ch-color, var(--green)) 20%, var(--surface)); }
+  50% { background: color-mix(in srgb, var(--ch-color, var(--green)) 40%, var(--surface)); }
+}
+.matrix-row-speaking { background: color-mix(in srgb, var(--green) 5%, transparent); }
+.matrix-empty {
+  text-align: center; padding: 32px; color: var(--muted); font-size: .82rem;
+}
+thead tr { background: var(--surface2); position: sticky; top: 0; z-index: 1; }
+
 /* ── Console logs ── */
 .logs-area { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
 .logs-toolbar {

@@ -38,6 +38,7 @@ socket.on("channels-init", (list) => {
 socket.on("channel-state", (state) => {
   channelState = state;
   renderChannels();
+  renderMatrix();
   updateStats();
 });
 
@@ -72,6 +73,7 @@ socket.on("ptt-state", ({ from, channel, speaking }) => {
     speakingUsers.delete(from);
   }
   renderChannels();
+  renderMatrix();
   updateStats();
 });
 
@@ -102,6 +104,65 @@ socket.on("audio-stats", ({ chunks, bytes, active }) => {
     updateLogBadge();
   }
 });
+
+// ── Matrice utilisateurs / canaux ─────────────────────────────────────────────
+function renderMatrix() {
+  const head = document.getElementById("matrixHead");
+  const body = document.getElementById("matrixBody");
+  if (!head || !body) return;
+
+  const chanIds = Object.keys(channelDefs).length ? Object.keys(channelDefs) : Object.keys(channelState);
+  if (!chanIds.length) { head.innerHTML = ""; body.innerHTML = ""; return; }
+
+  // Collecte tous les utilisateurs depuis channelState
+  const userMap = {}; // name → { channels: Set, talkChannels: Set }
+  for (const cid of chanIds) {
+    const st = channelState[cid] || {};
+    for (const u of (st.users || [])) {
+      if (!userMap[u.name]) userMap[u.name] = { channels: new Set(), listenChannels: new Set() };
+      userMap[u.name].channels.add(cid);
+    }
+  }
+
+  const userNames = Object.keys(userMap).sort();
+  if (!userNames.length) {
+    head.innerHTML = "";
+    body.innerHTML = `<tr><td colspan="${chanIds.length + 1}" class="matrix-empty">Aucun utilisateur connecté</td></tr>`;
+    return;
+  }
+
+  // En-tête : une colonne par canal
+  head.innerHTML = `<tr>
+    <th class="matrix-th-user"></th>
+    ${chanIds.map(cid => {
+      const def = channelDefs[cid] || {};
+      return `<th class="matrix-th-chan" style="--ch-color:${def.color || "#6b7280"}">
+        <div class="matrix-ch-dot"></div>
+        <div class="matrix-ch-label">${def.name || cid}</div>
+      </th>`;
+    }).join("")}
+  </tr>`;
+
+  // Corps : une ligne par utilisateur
+  body.innerHTML = userNames.map(name => {
+    const speaking = speakingUsers.has(name);
+    const cells = chanIds.map(cid => {
+      const inChan = (userMap[name] && userMap[name].channels.has(cid));
+      const def = channelDefs[cid] || {};
+      if (!inChan) return `<td class="matrix-cell matrix-cell-empty"></td>`;
+      if (speaking) return `<td class="matrix-cell matrix-cell-speaking" style="--ch-color:${def.color || "#22c55e"}" title="${name} parle sur ${def.name || cid}">🎙</td>`;
+      return `<td class="matrix-cell matrix-cell-active" style="--ch-color:${def.color || "#6b7280"}" title="${name} → ${def.name || cid}">●</td>`;
+    }).join("");
+    return `<tr class="${speaking ? "matrix-row-speaking" : ""}">
+      <td class="matrix-td-user">
+        <div class="matrix-user-avatar ${speaking ? "speaking" : ""}">${(name||"?")[0].toUpperCase()}</div>
+        <span class="matrix-user-name">${name}</span>
+        ${speaking ? "<span class=\"matrix-ptt-badge\">PTT</span>" : ""}
+      </td>
+      ${cells}
+    </tr>`;
+  }).join("");
+}
 
 // ── Rendu canaux ──────────────────────────────────────────────────────────────
 function chanName(id) {

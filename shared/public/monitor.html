@@ -65,6 +65,7 @@
   <div class="main-area">
     <div class="tabs">
       <button class="tab-btn active" data-tab="channels" onclick="switchTab('channels')">Canaux</button>
+      <button class="tab-btn" data-tab="matrix" onclick="switchTab('matrix')">Matrice</button>
       <button class="tab-btn" data-tab="logs" onclick="switchTab('logs')">
         Console <span class="tab-badge" id="logBadge">0</span>
       </button>
@@ -75,6 +76,20 @@
       <div class="channels-area">
         <div class="section-title">Canaux</div>
         <div class="channels-grid" id="channelsGrid"></div>
+      </div>
+    </div>
+
+    <!-- Onglet matrice utilisateurs/canaux -->
+    <div class="tab-panel" id="tab-matrix">
+      <div class="matrix-area">
+        <div class="section-title">Matrice de connexions</div>
+        <div class="matrix-hint">Lignes = utilisateurs — Colonnes = canaux — ● écoute/parle — 🎙 parle en ce moment</div>
+        <div class="matrix-scroll">
+          <table class="matrix-table" id="matrixTable">
+            <thead id="matrixHead"></thead>
+            <tbody id="matrixBody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
 

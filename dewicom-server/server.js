@@ -269,6 +269,15 @@ io.on("connection", (socket) => {
     monitorClients.add(socket.id);
     startAudioStatsTimer();
     socket.emit("monitor-state", monitorState());
+    // Envoie l'état courant des canaux (snapshot) — évite une page vide si rechargée après connexions
+    const state = {};
+    for (const [id, ch] of Object.entries(channels)) {
+      state[id] = {
+        ...ch,
+        users: Array.from(ch.users.values()).map(u => ({ id: u.socketId, name: u.name })),
+      };
+    }
+    socket.emit("channel-state", state);
     // Envoie l'historique des logs au nouvel abonné
     socket.emit("log-history", logBuffer.slice(-200));
     console.log(`[server] monitor-subscribe: ${socket.id} (${monitorClients.size} abonnés)`);
