@@ -5,6 +5,13 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 
 ---
 
+## [1.4.4] — 2026-03-04
+
+### Corrigé
+- **`ReferenceError: io is not defined` dans `serverLog()`** : `io` était déclaré `let` à l'intérieur de l'IIFE async, hors de portée de `serverLog()` définie en scope global. Fix : `let io = null` remonté en scope global — `dewicom-server/server.js`
+
+---
+
 ## [1.4.3] — 2026-03-04
 
 ### Ajouté

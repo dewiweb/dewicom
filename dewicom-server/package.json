@@ -1,6 +1,6 @@
 {
   "name": "dewicom-server",
-  "version": "1.4.3",
+  "version": "1.4.4",
   "description": "DewiCom — serveur intercom standalone (Docker / RPi / PC dédié)",
   "main": "server.js",
   "scripts": {
