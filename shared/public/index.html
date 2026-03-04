@@ -423,6 +423,53 @@
     .user-row-name { font-size: .875rem; font-weight: 500; }
     .user-me { font-size: .65rem; color: var(--muted); margin-left: 4px; }
 
+    /* AUDIO SETTINGS PANEL */
+    #audioPanel {
+      position: fixed; inset: 0; background: #000c; z-index: 50;
+      display: flex; align-items: flex-end;
+      backdrop-filter: blur(4px);
+    }
+    #audioPanel.hidden { display: none; }
+    .audio-sheet {
+      width: 100%; background: var(--surface); border-radius: 20px 20px 0 0;
+      border-top: 1px solid var(--border2);
+      padding: 8px 0 40px; max-height: 80vh; overflow-y: auto;
+    }
+    .audio-section {
+      padding: 12px 18px; border-bottom: 1px solid var(--border);
+    }
+    .audio-section:last-of-type { border-bottom: none; }
+    .audio-section-title {
+      font-size: .65rem; font-weight: 800; text-transform: uppercase;
+      letter-spacing: .1em; color: var(--muted); margin-bottom: 10px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .audio-select {
+      width: 100%; background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 10px; color: var(--text); font-size: .875rem; padding: 11px 14px;
+      outline: none; cursor: pointer; appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23606060' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 12px center;
+      padding-right: 32px;
+    }
+    .audio-select:focus { border-color: var(--green); box-shadow: 0 0 0 3px #22c55e18; }
+    .audio-device-hint {
+      font-size: .68rem; color: var(--muted); margin-top: 6px; line-height: 1.5;
+    }
+    .audio-apply-btn {
+      width: 100%; padding: 13px; border-radius: 12px; margin-top: 4px;
+      background: var(--green); color: #000; font-size: .9rem; font-weight: 800;
+      border: none; cursor: pointer; transition: all .15s;
+      box-shadow: var(--green-glow);
+    }
+    .audio-apply-btn:active { transform: scale(.98); }
+    .audio-status {
+      font-size: .72rem; text-align: center; padding: 6px 0 0;
+      color: var(--muted); min-height: 20px;
+    }
+    .audio-status.ok  { color: var(--green); }
+    .audio-status.err { color: var(--red); }
+
     /* QR PANEL */
     #qrPanel {
       position: fixed; inset: 0; background: #000c; z-index: 50;
@@ -499,6 +546,7 @@
       </div>
     </div>
     <div class="topbar-right">
+      <button class="icon-btn" id="audioSettingsBtn" title="Périphériques audio">🎛️</button>
       <button class="icon-btn" id="usersBtn" title="Participants">👥</button>
       <button class="icon-btn" id="qrBtn" title="QR Code">⬡</button>
     </div>
@@ -572,6 +620,38 @@
       <button class="sheet-close" id="closeUsers">✕</button>
     </div>
     <div id="usersList"></div>
+  </div>
+</div>
+
+<!-- AUDIO SETTINGS PANEL -->
+<div id="audioPanel" class="hidden">
+  <div class="audio-sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">
+      Périphériques audio
+      <button class="sheet-close" id="closeAudio">✕</button>
+    </div>
+
+    <div class="audio-section">
+      <div class="audio-section-title">🎙️ Entrée (microphone)</div>
+      <select class="audio-select" id="inputDeviceSelect">
+        <option value="">Par défaut du système</option>
+      </select>
+      <div class="audio-device-hint">Micro utilisé pour la transmission PTT</div>
+    </div>
+
+    <div class="audio-section">
+      <div class="audio-section-title">🔊 Sortie (casque / hauts-parleurs)</div>
+      <select class="audio-select" id="outputDeviceSelect">
+        <option value="">Par défaut du système</option>
+      </select>
+      <div class="audio-device-hint">Casque ou interface audio pour écouter les interlocuteurs</div>
+    </div>
+
+    <div class="audio-section">
+      <button class="audio-apply-btn" id="applyAudioBtn">Appliquer</button>
+      <div class="audio-status" id="audioStatus"></div>
+    </div>
   </div>
 </div>
 

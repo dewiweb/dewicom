@@ -34,5 +34,7 @@ let channelStates = {};
 let directorMode = false;
 let ringSoundEnabled = true;
 let pttMode = true;
+let selectedInputId  = localStorage.getItem("dewicom-input-device")  || "";
+let selectedOutputId = localStorage.getItem("dewicom-output-device") || "";
 let allPttKeys = ["Space", "Enter", "KeyZ", "KeyX", "MediaPlayPause", "MediaTrackNext", "MediaTrackPrevious", "MediaStop"];
 let mediaKeyState = {};

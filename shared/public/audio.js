@@ -1,13 +1,58 @@
 // Gestion audio : capture micro, lecture chunks PCM, sonnerie
 let nextPlayTime = 0;
+let outputNode = null; // GainNode de sortie pour router vers le périphérique de sortie
+
+// ── Périphériques audio ───────────────────────────────────────────────────────
+async function enumerateAudioDevices() {
+  try {
+    // Déclencher l'accès micro pour obtenir les labels (permissions)
+    await navigator.mediaDevices.getUserMedia({ audio: true }).then(s => s.getTracks().forEach(t => t.stop())).catch(() => {});
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    return {
+      inputs:  devices.filter(d => d.kind === "audioinput"),
+      outputs: devices.filter(d => d.kind === "audiooutput"),
+    };
+  } catch(e) {
+    console.warn("[audio] enumerateAudioDevices:", e);
+    return { inputs: [], outputs: [] };
+  }
+}
+
+async function applyAudioDevices(inputId, outputId) {
+  selectedInputId  = inputId  || "";
+  selectedOutputId = outputId || "";
+  localStorage.setItem("dewicom-input-device",  selectedInputId);
+  localStorage.setItem("dewicom-output-device", selectedOutputId);
+
+  // Réacquérir le stream micro si nécessaire
+  if (mediaStream) {
+    mediaStream.getTracks().forEach(t => t.stop());
+    mediaStream = null;
+  }
+  if (processor) { processor.disconnect(); processor = null; }
+  if (audioCtx)  { try { await audioCtx.close(); } catch(e) {} audioCtx = null; }
+  outputNode = null;
+  nextPlayTime = 0;
+
+  // Re-init stream + processor
+  try {
+    const constraints = { audio: selectedInputId ? { deviceId: { exact: selectedInputId } } : true };
+    mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+    setupAudioProcessor();
+  } catch(e) {
+    console.error("[audio] applyAudioDevices — getUserMedia:", e);
+  }
+}
 
 function setupAudioProcessor() {
   if (!mediaStream) return;
   audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000, latencyHint: "interactive" });
   const source = audioCtx.createMediaStreamSource(mediaStream);
   processor = audioCtx.createScriptProcessor(512, 1, 1);
+  outputNode = audioCtx.createGain();
+  outputNode.connect(audioCtx.destination);
   source.connect(processor);
-  processor.connect(audioCtx.destination);
+  processor.connect(outputNode);
   processor.onaudioprocess = (e) => {
     if (!speaking) return;
     const input = e.inputBuffer.getChannelData(0);
@@ -33,8 +78,22 @@ function floatTo16BitPCM(float32Array) {
   return buffer;
 }
 
+async function getOrCreateAudioCtx() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000, latencyHint: "interactive" });
+    // Appliquer le périphérique de sortie si supporté (Chromium / Electron)
+    if (selectedOutputId && typeof audioCtx.setSinkId === "function") {
+      try { await audioCtx.setSinkId(selectedOutputId); } catch(e) { console.warn("[audio] setSinkId:", e); }
+    }
+    outputNode = audioCtx.createGain();
+    outputNode.connect(audioCtx.destination);
+  }
+  if (audioCtx.state === "suspended") await audioCtx.resume();
+  return audioCtx;
+}
+
 async function playChunk(data) {
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000, latencyHint: "interactive" });
+  await getOrCreateAudioCtx();
   if (audioCtx.state === "suspended") await audioCtx.resume();
 
   let int16;
@@ -61,7 +120,7 @@ async function playChunk(data) {
   buffer.copyToChannel(float32, 0);
   const source = audioCtx.createBufferSource();
   source.buffer = buffer;
-  source.connect(audioCtx.destination);
+  source.connect(outputNode || audioCtx.destination);
   const now = audioCtx.currentTime;
   if (nextPlayTime < now) nextPlayTime = now + 0.02;
   source.start(nextPlayTime);
