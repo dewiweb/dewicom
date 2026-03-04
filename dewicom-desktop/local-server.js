@@ -136,8 +136,7 @@ function stopAnnouncing() {
  * Démarre le serveur local embarqué.
  * Retourne une Promise<{url, ip, port, protocol}> quand le serveur est prêt.
  */
-function start(options = {}) {
-  return new Promise((resolve, reject) => {
+async function start(options = {}) {
     const modulesPath = path.join(__dirname, "node_modules");
     let express, socketIo;
     try {
@@ -148,7 +147,7 @@ function start(options = {}) {
         express  = require("express");
         socketIo = require("socket.io").Server;
       } catch (e2) {
-        return reject(new Error("express/socket.io non trouvés: " + e2.message));
+        throw new Error("express/socket.io non trouvés: " + e2.message);
       }
     }
 
@@ -160,7 +159,8 @@ function start(options = {}) {
       let selfSigned;
       try { selfSigned = require(path.join(modulesPath, "selfsigned")); } catch (_) {}
       if (!selfSigned) selfSigned = require("selfsigned");
-      tlsCreds = selfSigned.generate(
+      // selfsigned v5 est async
+      tlsCreds = await selfSigned.generate(
         [{ name: "commonName", value: "DewiCom-Desktop" }],
         {
           days: 3650,
@@ -408,20 +408,20 @@ function start(options = {}) {
     });
 
     // ── Démarrage ────────────────────────────────────────────────────────────────
-    netServer.listen(LOCAL_PORT, "0.0.0.0", () => {
-      const ip         = getLocalIP();
-      const localUrl   = `${protocol}://127.0.0.1:${LOCAL_PORT}`;
-      const networkUrl = `${protocol}://${ip}:${LOCAL_PORT}`;
-      console.log(`[local-server] Démarré (${protocol.toUpperCase()}) → ${localUrl}`);
-      console.log(`[local-server] Réseau     → ${networkUrl}`);
-      console.log(`[local-server] Monitoring → ${networkUrl}/monitor`);
-      console.log(`[local-server] Fichiers   → ${PUBLIC_DIR}`);
-      startAnnouncing(ip, LOCAL_PORT, mode, protocol);
-      resolve({ url: localUrl, ip, port: LOCAL_PORT, protocol });
+    return new Promise((resolve, reject) => {
+      netServer.listen(LOCAL_PORT, "0.0.0.0", () => {
+        const ip         = getLocalIP();
+        const localUrl   = `${protocol}://127.0.0.1:${LOCAL_PORT}`;
+        const networkUrl = `${protocol}://${ip}:${LOCAL_PORT}`;
+        console.log(`[local-server] Démarré (${protocol.toUpperCase()}) → ${localUrl}`);
+        console.log(`[local-server] Réseau     → ${networkUrl}`);
+        console.log(`[local-server] Monitoring → ${networkUrl}/monitor`);
+        console.log(`[local-server] Fichiers   → ${PUBLIC_DIR}`);
+        startAnnouncing(ip, LOCAL_PORT, mode, protocol);
+        resolve({ url: localUrl, ip, port: LOCAL_PORT, protocol });
+      });
+      netServer.on("error", reject);
     });
-
-    netServer.on("error", reject);
-  });
 }
 
 function notifyRedirect(newUrl) {

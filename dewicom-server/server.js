@@ -43,7 +43,7 @@ const PUBLIC_DIR = (() => {
   return path.join(__dirname, "../shared/public");
 })();
 
-// ── Certificat TLS auto-signé (généré au démarrage) ───────────────────────────
+// ── Certificat TLS auto-signé (selfsigned v5 = async) ────────────────────────
 // getUserMedia requiert un secure context (HTTPS ou localhost).
 // Le cert auto-signé est accepté par Electron (setCertificateVerifyProc)
 // et par l'APK Android (SSLConfigurator + onReceivedSslError).
@@ -54,16 +54,14 @@ const TLS_OPTS  = {
   algorithm: "sha256",
   extensions: [
     { name: "subjectAltName", altNames: [
-      { type: 2, value: "dewicom.local" },   // DNS
-      { type: 7, ip: "0.0.0.0" },            // IP générique
+      { type: 2, value: "dewicom.local" },
+      { type: 7, ip: "0.0.0.0" },
     ]},
     { name: "basicConstraints", cA: false },
     { name: "keyUsage", keyCertSign: false, digitalSignature: true, keyEncipherment: true },
     { name: "extKeyUsage", serverAuth: true },
   ],
 };
-const tlsPems   = selfsigned.generate(TLS_ATTRS, TLS_OPTS);
-console.log("[server] Certificat TLS auto-signé généré (valide 10 ans)");
 
 // ── Logging centralisé — diffuse vers console ET clients monitor ───────────────
 const LOG_BUFFER_MAX = 500;
@@ -160,11 +158,16 @@ const channels = {
 };
 const users = new Map();
 
+// ── Démarrage asynchrone (selfsigned v5 retourne une Promise) ─────────────────
+(async () => {
+const tlsPems   = await selfsigned.generate(TLS_ATTRS, TLS_OPTS);
+_origLog("[server] Certificat TLS auto-signé généré (valide 10 ans)");
+
 // ── Serveur HTTPS + Socket.io ─────────────────────────────────────────────────
 
 const app         = express();
 const httpsServer = https.createServer({ key: tlsPems.private, cert: tlsPems.cert }, app);
-let io            = null; // initialisé après httpsServer
+let io            = null;
 io                = new socketIo(httpsServer, { cors: { origin: "*" } });
 
 // ── Routes ────────────────────────────────────────────────────────────────────
@@ -425,3 +428,5 @@ function shutdown() {
 }
 process.on("SIGTERM", shutdown);
 process.on("SIGINT",  shutdown);
+
+})().catch(e => { console.error("[server] Erreur fatale au démarrage:", e.message); process.exit(1); });
