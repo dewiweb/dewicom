@@ -1,11 +1,11 @@
 // ============================================================
-// DewiCom Beltpack BP-1 — boîtier OpenSCAD  v4
+// DewiCom Beltpack BP-1 — boîtier OpenSCAD  v5
 //
 // ORIENTATION BELTPACK PRO — posé à plat, porté à la ceinture
 //
 //   X = largeur   =  90mm
-//   Y = épaisseur =  62mm  (avant → arrière, contraint par SDM_Y_DIM=55.5mm)
-//   Z = hauteur   = 155mm  (bas → haut)
+//   Y = épaisseur =  62mm  (contraint par SDM_Y_DIM=55.5mm + 2×WALL)
+//   Z = hauteur   =  80mm  (HATs superposés via FFC — budget Z = ~70mm)
 //
 //   Dessus  Z+ : Stream Deck Module 6 touches (84×55mm) dans plan XY
 //   Dessous Z- : connecteurs XLR5 + RJ45 + USB-C
@@ -22,7 +22,7 @@ $fn = 64;
 // ── Boîtier ──────────────────────────────────────────────────
 BOX_W  =  90;   // largeur  X mm
 BOX_Y  =  62;   // épaisseur Y mm — min 60.5mm (SDM_Y_DIM=55.5 + 2×WALL)
-BOX_H  = 155;   // hauteur  Z mm
+BOX_H  =  80;   // hauteur  Z mm — réduit grâce à superposition HATs via FFC
 WALL   =   2.5;
 FILLET =   4;
 
@@ -41,38 +41,49 @@ SDM_OY     = (SDM_Y_DIM - SDM_WIN_Y) / 2;
 SDM_PX     = (BOX_W - SDM_W)     / 2;  // centré X
 SDM_PY     = (BOX_Y - SDM_Y_DIM) / 2;  // centré Y
 
-// ── Composants internes — disposés sur axe Z, depuis le bas ──
-// Tous à plat dans plan XY, empilés vers le haut
+// ── Composants internes — superposés via FFC pour minimiser Z ─
+//
+// Budget Z (depuis bas) :
+//   WALL(2.5) + connecteurs internes(8) + entretoises(3)
+//   + RPi(5) + FFC(2) + WM8960(3) + FFC(2) + PoE HAT(11)
+//   + gap(3) + LiPo(5) + gap(5) + SDM(21) + WALL(2.5) ≈ 72mm → BOX_H=80mm
+//
+// Interconnexions FFC :
+//   RPi GPIO40 → PoE HAT  : câble FFC ribbon 40 broches (2mm épaisseur)
+//   RPi I2S/I2C → WM8960  : câble FFC 6 broches (2mm épaisseur)
+//   RPi USB-C data → SDM  : câble USB-C coudé interne court
 
-// RPi Zero 2W (65×30mm)  axe long sur X
+// RPi Zero 2W (65×30mm) — plat XY, centré
 RPI_W = 65; RPI_Y_D = 30; RPI_T = 5;
-RPI_X = (BOX_W - RPI_W) / 2;
+RPI_X  = (BOX_W - RPI_W)   / 2;
 RPI_PY = (BOX_Y - RPI_Y_D) / 2;
-RPI_Z = WALL + 12;   // depuis le bas (au-dessus des connecteurs)
+RPI_Z  = WALL + 8;   // 8mm au-dessus du fond (clearance connecteurs)
 
-// WM8960 Audio HAT (65×30×3mm) — juste au-dessus RPi via FFC
+// WM8960 Audio HAT (65×30×3mm) — superposé sur RPi via FFC I2S
 WM_W = 65; WM_Y_D = 30; WM_T = 3;
-WM_X = (BOX_W - WM_W) / 2;
+WM_X  = RPI_X;
 WM_PY = RPI_PY;
-WM_Z = RPI_Z + RPI_T + 8;   // 8mm header
+WM_Z  = RPI_Z + RPI_T + 2;  // 2mm FFC plat
 
-// PoE HAT (65×30×11mm)
+// PoE HAT Waveshare mini (65×30×11mm) — superposé sur WM8960 via FFC GPIO
 POE_W = 65; POE_Y_D = 30; POE_T = 11;
-POE_X = (BOX_W - POE_W) / 2;
+POE_X  = RPI_X;
 POE_PY = RPI_PY;
-POE_Z = WM_Z + WM_T + 8;
+POE_Z  = WM_Z + WM_T + 2;   // 2mm FFC plat
 
-// LiPo 704050 (70×40×5mm) — à plat
-LIPO_W = 70; LIPO_Y_D = 38; LIPO_T = 5;
-LIPO_X = (BOX_W - LIPO_W) / 2;
-LIPO_PY = (BOX_Y - LIPO_Y_D) / 2;
-LIPO_Z = POE_Z + POE_T + 6;
+// LiPo 704050 (70×40×5mm) — côté avant (Y-), même Z que PoE HAT
+// Tient côte à côte en Y : PoE (30mm) + LiPo (40mm) > 57mm intérieur
+// → LiPo calé côté avant, PoE côté arrière
+LIPO_W  = 70; LIPO_Y_D = 40; LIPO_T = 5;
+LIPO_X  = (BOX_W - LIPO_W) / 2;
+LIPO_PY = WALL;              // calé sur paroi avant
+LIPO_Z  = POE_Z + POE_T + 3;
 
-// BMS TP5100 (40×20×6mm)
+// BMS TP5100 (40×20×6mm) — côte à côte avec LiPo en X, même Z
 BMS_W = 40; BMS_Y_D = 20; BMS_T = 6;
-BMS_X = (BOX_W - BMS_W) / 2;
-BMS_PY = (BOX_Y - BMS_Y_D) / 2;
-BMS_Z = LIPO_Z + LIPO_T + 4;
+BMS_X  = WALL + 4;
+BMS_PY = WALL + LIPO_Y_D + 2;  // derrière la LiPo
+BMS_Z  = LIPO_Z;
 
 // ── Connecteurs face dessous (Z = 0) ─────────────────────────
 // Face 90mm (X) × 42mm (Y) — layout beltpack pro
@@ -89,7 +100,6 @@ USBC_X   = BOX_W * 0.74;
 USBC_Y   = (BOX_Y - USBC_Y_C) / 2;
 
 // ── Clip ceinture — face dos (Y+) ────────────────────────────
-CLIP_H_C    = 90;  // hauteur clip (axe Z)
 CLIP_T      =  5;  // épaisseur lame
 CLIP_SLOT   = 50;  // largeur ceinture max (axe Z)
 
@@ -239,38 +249,55 @@ module clip_ceinture() {
 // ── Internals ─────────────────────────────────────────────────
 
 module internals() {
-    // RPi Zero 2W — plat XY, Z bas
+    // ── Stack superposé RPi / WM8960 / PoE HAT ───────────────
+    // RPi Zero 2W (vert)
     color("Green", 0.75)
     translate([RPI_X, RPI_PY, RPI_Z]) cube([RPI_W, RPI_Y_D, RPI_T]);
 
-    // Entretoises M2.5
+    // Entretoises M2.5 aux coins
     color("Silver", 0.9)
     for (ex=[RPI_X+3.5, RPI_X+RPI_W-3.5])
         for (ey=[RPI_PY+3.5, RPI_PY+RPI_Y_D-3.5])
             translate([ex, ey, WALL]) cylinder(d=2.5, h=RPI_Z - WALL);
 
-    // WM8960 Audio HAT
+    // FFC plat RPi → WM8960 (I2S/I2C, 6 broches)
+    color("Gold", 0.8)
+    translate([RPI_X + 10, RPI_PY + RPI_Y_D/2 - 3, RPI_Z + RPI_T])
+        cube([20, 6, 2]);
+
+    // WM8960 Audio HAT (vert foncé)
     color("DarkGreen", 0.7)
     translate([WM_X, WM_PY, WM_Z]) cube([WM_W, WM_Y_D, WM_T]);
 
-    // PoE HAT
+    // FFC plat RPi → PoE HAT (GPIO ribbon 40 broches)
+    color("Gold", 0.7)
+    translate([RPI_X + RPI_W - 15, RPI_PY + 3, WM_Z + WM_T])
+        cube([12, 8, 2]);
+
+    // PoE HAT Waveshare mini (orange)
     color("DarkOrange", 0.7)
     translate([POE_X, POE_PY, POE_Z]) cube([POE_W, POE_Y_D, POE_T]);
 
-    // LiPo 704050
+    // ── LiPo + BMS sur Z au-dessus du stack ──────────────────
+    // LiPo 704050 (bleu)
     color("SteelBlue", 0.75)
     translate([LIPO_X, LIPO_PY, LIPO_Z]) cube([LIPO_W, LIPO_Y_D, LIPO_T]);
 
-    // BMS TP5100
+    // BMS TP5100 (marron) — derrière la LiPo en Y
     color("Chocolate", 0.8)
     translate([BMS_X, BMS_PY, BMS_Z]) cube([BMS_W, BMS_Y_D, BMS_T]);
 
-    // Câble FFC RPi ↔ WM8960 (ruban doré vertical)
-    color("Gold", 0.6)
-    translate([RPI_X + RPI_W/2 - 2, RPI_PY + RPI_Y_D/2, RPI_Z + RPI_T])
-        cube([4, 2, WM_Z - RPI_Z - RPI_T]);
+    // Câble LiPo → BMS (2 fils rouge/noir)
+    color("Red", 0.9)
+    translate([LIPO_X + LIPO_W - 5, LIPO_PY + LIPO_Y_D, LIPO_Z + 2])
+        cube([3, BMS_PY - LIPO_PY - LIPO_Y_D, 1]);
 
-    // Stream Deck Module 6t (encastré face dessus)
+    // Câble USB-C interne RPi → Stream Deck (coude)
+    color("Gray", 0.7)
+    translate([RPI_X + RPI_W/2 - 2, SDM_PY + SDM_Y_DIM/2, POE_Z + POE_T + 1])
+        cube([4, 3, LIPO_Z - POE_Z - POE_T]);
+
+    // ── Stream Deck Module 6t (gris, encastré face dessus) ────
     color("Gainsboro", 0.85)
     translate([SDM_PX, SDM_PY, BOX_H - SDM_D]) cube([SDM_W, SDM_Y_DIM, SDM_D]);
 
@@ -284,7 +311,8 @@ module internals() {
         ])
         cube([SDM_KEY_W, SDM_KEY_H, 0.8]);
 
-    // XLR5 NC5MPR (corps sous la boîte)
+    // ── Connecteurs externes (sous la boîte) ──────────────────
+    // XLR5 NC5MPR coudé
     color("Silver", 0.85)
     translate([XLR5_X - XLR5_HOLE/2, XLR5_Y - XLR5_HOLE/2, -14])
         cube([XLR5_HOLE, XLR5_HOLE, 14]);
@@ -303,17 +331,17 @@ module annotations() {
             cube([BOX_W, 0.3, 0.3]);
             translate([BOX_W/2-8, -5, 0]) linear_extrude(1) text("90mm", size=4);
         }
-        // Y = 42mm
+        // Y = 62mm
         translate([-12, 0, 0]) {
             cube([0.3, BOX_Y, 0.3]);
             translate([-2, BOX_Y/2, 0]) rotate([0,0,90])
-                linear_extrude(1) text("42mm", size=4);
+                linear_extrude(1) text("62mm", size=4);
         }
-        // Z = 155mm
+        // Z = 80mm
         translate([BOX_W+3, 0, 0]) {
             cube([0.3, 0.3, BOX_H]);
             translate([2, 0, BOX_H/2]) rotate([0,0,0])
-                linear_extrude(1) text("155mm", size=4);
+                linear_extrude(1) text("80mm", size=4);
         }
     }
 }
