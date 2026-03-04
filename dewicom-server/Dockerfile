@@ -19,9 +19,9 @@ ENV NODE_ENV=production \
 
 EXPOSE 3001
 
-# Healthcheck : vérifie que l'API répond
-HEALTHCHECK --interval=10s --timeout=3s --retries=3 \
-  CMD wget -qO- http://localhost:3001/api/dewicom-discovery || exit 1
+# Healthcheck : vérifie que l'API répond (HTTPS, cert auto-signé accepté via --no-check-certificate)
+HEALTHCHECK --interval=10s --timeout=5s --retries=3 \
+  CMD wget -qO- --no-check-certificate https://localhost:3001/api/dewicom-discovery || exit 1
 
 USER node
 CMD ["node", "server.js"]

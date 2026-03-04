@@ -5,6 +5,22 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 
 ---
 
+## [1.4.0] — 2026-03-04
+
+### Ajouté
+- **HTTPS auto-signé — serveur Docker** : `server.js` génère un certificat TLS self-signed au démarrage (`selfsigned` npm, valide 10 ans). Le serveur écoute désormais en HTTPS+WSS. Les annonces multicast indiquent `protocol: "https"`. QR code pointe vers `https://` — `dewicom-server/server.js`
+- **HTTPS conditionnel — serveur Desktop** : `local-server.js` démarre en HTTPS pour les modes `dedicated`/`desktop-server` (clients LAN ont besoin d'un secure context pour `getUserMedia`). Mode `desktop-local` reste HTTP (localhost = secure context natif) — `dewicom-desktop/local-server.js`
+- **Logging centralisé broadcast** : `console.log/warn/error` interceptés dans `server.js` et `local-server.js` — chaque message est bufferisé (300-500 entrées) et diffusé en temps réel aux clients abonnés via `server-log` Socket.io. Route `GET /api/logs` expose l'historique — `server.js`, `local-server.js`
+- **Stats audio temps réel** : comptage des chunks et octets audio par intervalle de 2s, diffusés aux clients monitor via `audio-stats` Socket.io — `server.js`, `local-server.js`
+- **Monitor refonte modulaire** : `monitor.html` restructuré en 3 fichiers (`monitor.html`, `monitor.css`, `monitor.js`). Ajout d'un onglet Console avec logs colorés par niveau (INFO/WARN/ERROR/AUDIO), filtres, auto-scroll, compteur d'erreurs. Stats audio dans la barre de métriques — `shared/public/monitor.{html,css,js}`
+- **APK — acceptation certs HTTPS** : `onReceivedSslError` + `handler.proceed()` dans `SSLWebViewClient.java` et `buildWebViewClient()`. `normalizeUrl()` préfixe désormais `https://` par défaut — `dewicom-mobile/…/SSLWebViewClient.java`, `MainActivity.java`
+
+### Modifié
+- **Desktop `main.js`** : `pingServer()` essaie HTTPS d'abord (cert ignoré via `rejectUnauthorized:false`) puis fallback HTTP. `setupMediaPermissions()` simplifié — plus de relaunch app pour changer d'origine HTTP. Suppression du flag `unsafely-treat-insecure-origin-as-secure` — `dewicom-desktop/main.js`
+- **Dockerfile + docker-compose** : healthcheck mis à jour en `https://` avec `--no-check-certificate`, `start_period` porté à 8s — `dewicom-server/Dockerfile`, `docker-compose.yml`
+
+---
+
 ## [1.3.4] — 2026-03-03
 
 ### Corrigé

@@ -1,29 +1,30 @@
 package com.dewicom;
 
+import android.net.http.SslError;
+import android.webkit.SslErrorHandler;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.webkit.WebResourceRequest;
-import android.webkit.WebResourceResponse;
 import android.webkit.WebResourceError;
-import android.widget.Toast;
-import javax.net.ssl.HttpsURLConnection;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.X509TrustManager;
-import java.security.cert.X509Certificate;
-import java.io.ByteArrayInputStream;
+import android.util.Log;
 
 public class SSLWebViewClient extends WebViewClient {
-    
+
+    private static final String TAG = "SSLWebViewClient";
+
+    /**
+     * Accepte les certificats auto-signés des serveurs DewiCom.
+     * Le serveur génère un cert self-signed au démarrage (selfsigned npm package).
+     * getUserMedia requiert HTTPS (secure context) → l'acceptation est obligatoire.
+     */
+    @Override
+    public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
+        Log.w(TAG, "Certificat SSL non-standard accepté (cert auto-signé DewiCom): " + error.toString());
+        handler.proceed();
+    }
+
     @Override
     public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
-        super.onReceivedError(view, request, error);
-        Toast.makeText(view.getContext(), "Erreur SSL: " + error.getDescription(), Toast.LENGTH_LONG).show();
-    }
-    
-    @Override
-    public void onPageFinished(WebView view, String url) {
-        super.onPageFinished(view, url);
-        Toast.makeText(view.getContext(), "Page chargée: " + url, Toast.LENGTH_SHORT).show();
+        Log.e(TAG, "WebResource error: " + error.getDescription() + " on " + request.getUrl());
     }
 }

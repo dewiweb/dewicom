@@ -1,6 +1,6 @@
 {
   "name": "dewicom-desktop",
-  "version": "1.3.4",
+  "version": "1.4.0",
   "description": "DewiCom Desktop - Application PTT cross-platform",
   "author": {
     "name": "dewiweb",
@@ -80,6 +80,7 @@
   "dependencies": {
     "express": "^5.2.1",
     "qrcode": "^1.5.4",
+    "selfsigned": "^5.5.0",
     "socket.io": "^4.8.3"
   }
 }

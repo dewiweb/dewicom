@@ -1,15 +1,16 @@
 /**
  * Serveur local embarqué dans l'app desktop.
- * Lance un serveur HTTP + Socket.io sur localhost:3001 quand aucun
- * serveur DewiCom n'est trouvé sur le LAN.
- * Pas de SSL → localhost est toujours un secure context → micro fonctionne.
+ * - mode desktop-local : HTTP sur 127.0.0.1 (localhost = secure context, micro OK)
+ * - mode dedicated / desktop-server : HTTPS avec cert auto-signé (clients LAN besoin secure context)
  */
 
-const http = require("http");
-const path = require("path");
-const os   = require("os");
-const dgram = require("dgram");
-const fs   = require("fs");
+const http       = require("http");
+const https      = require("https");
+const path       = require("path");
+const os         = require("os");
+const dgram      = require("dgram");
+const fs         = require("fs");
+const selfsigned = require("selfsigned");
 
 const { version: APP_VERSION } = require("./package.json");
 const QRCode = require("qrcode");
@@ -31,11 +32,40 @@ const PUBLIC_DIR = (() => {
   return path.join(__dirname, "../shared/public");
 })();
 
-let expressApp = null;
-let httpServer = null;
-let io = null;
+let expressApp     = null;
+let netServer      = null;  // http.Server ou https.Server selon le mode
+let io             = null;
 let announceSocket = null;
-let announceTimer = null;
+let announceTimer  = null;
+
+// ── Logging centralisé — diffuse vers console ET clients monitor ───────────────
+const LOG_BUFFER_MAX = 300;
+const logBuffer      = [];
+const monitorClients = new Set();
+
+const _origLog   = console.log.bind(console);
+const _origWarn  = console.warn.bind(console);
+const _origError = console.error.bind(console);
+
+function serverLog(level, msg) {
+  const entry = { ts: Date.now(), level, msg };
+  logBuffer.push(entry);
+  if (logBuffer.length > LOG_BUFFER_MAX) logBuffer.shift();
+  if (io) {
+    for (const sid of monitorClients) {
+      const s = io.sockets.sockets.get(sid);
+      if (s) s.emit("server-log", entry);
+    }
+  }
+}
+
+console.log   = (...a) => { const m = a.map(x => typeof x === "object" ? JSON.stringify(x) : String(x)).join(" "); _origLog(m);   serverLog("info",  m); };
+console.warn  = (...a) => { const m = a.map(x => typeof x === "object" ? JSON.stringify(x) : String(x)).join(" "); _origWarn(m);  serverLog("warn",  m); };
+console.error = (...a) => { const m = a.map(x => typeof x === "object" ? JSON.stringify(x) : String(x)).join(" "); _origError(m); serverLog("error", m); };
+
+// ── Audio stats ────────────────────────────────────────────────────────────────
+const audioStats    = { chunks: 0, bytes: 0, activeSockets: new Set() };
+let audioStatsTimer = null;
 
 function getForcedInterface() {
   try {
@@ -53,7 +83,7 @@ function getLocalIP() {
   for (const [name, ifaces] of Object.entries(os.networkInterfaces())) {
     for (const iface of ifaces) {
       if (iface.family !== "IPv4" || iface.internal) continue;
-      if (iface.address.startsWith("169.254.")) continue; // APIPA — pas de routeur
+      if (iface.address.startsWith("169.254.")) continue;
       const lname = name.toLowerCase();
       let score = 0;
       if (lname.includes("virtualbox") || lname.includes("vmware") ||
@@ -73,12 +103,12 @@ function getLocalIP() {
   return candidates[0].address;
 }
 
-function startAnnouncing(ip, port, mode = "desktop-local") {
+function startAnnouncing(ip, port, mode, protocol) {
   try {
     announceSocket = dgram.createSocket({ type: "udp4" });
     const payload = Buffer.from(JSON.stringify({
       service: "DewiCom", version: APP_VERSION,
-      ip, port, protocol: "http",
+      ip, port, protocol,
       mode,
     }));
     const send = () => {
@@ -89,8 +119,8 @@ function startAnnouncing(ip, port, mode = "desktop-local") {
     announceSocket.bind(() => {
       announceSocket.setMulticastTTL(4);
       send();
-      announceTimer = setInterval(send, 1000);  // 1s pour réduire le délai de découverte
-      console.log(`[local-server] Annonces multicast → ${ip}:${port} (mode=${mode})`);
+      announceTimer = setInterval(send, 1000);
+      console.log(`[local-server] Annonces multicast → ${ip}:${port} (mode=${mode}, proto=${protocol})`);
     });
   } catch (e) {
     console.warn("[local-server] Impossible de démarrer les annonces multicast:", e.message);
@@ -104,34 +134,56 @@ function stopAnnouncing() {
 
 /**
  * Démarre le serveur local embarqué.
- * Retourne une Promise<{url, ip, port}> quand le serveur est prêt.
+ * Retourne une Promise<{url, ip, port, protocol}> quand le serveur est prêt.
  */
 function start(options = {}) {
   return new Promise((resolve, reject) => {
-    // Charge express et socket.io depuis node_modules local
     const modulesPath = path.join(__dirname, "node_modules");
-
     let express, socketIo;
     try {
-      express = require(path.join(modulesPath, "express"));
+      express  = require(path.join(modulesPath, "express"));
       socketIo = require(path.join(modulesPath, "socket.io")).Server;
     } catch (e) {
-      // Fallback: essaie require direct
       try {
-        express = require("express");
+        express  = require("express");
         socketIo = require("socket.io").Server;
       } catch (e2) {
         return reject(new Error("express/socket.io non trouvés: " + e2.message));
       }
     }
 
-    expressApp = express();
-    httpServer = http.createServer(expressApp);
-    io = new socketIo(httpServer, { cors: { origin: "*" } });
+    // HTTPS pour les modes servant d'autres appareils LAN (getUserMedia requiert secure context)
+    // HTTP pour desktop-local : 127.0.0.1 est toujours un secure context
+    const mode     = options.mode || "desktop-local";
+    const useHttps = (mode === "dedicated" || mode === "desktop-server");
+    let   protocol = useHttps ? "https" : "http";
+    let   tlsCreds = null;
 
-    // ── Routes ──────────────────────────────────────────────────────────────
+    if (useHttps) {
+      try {
+        let selfSigned;
+        try { selfSigned = require(path.join(modulesPath, "selfsigned")); } catch (_) {}
+        if (!selfSigned) selfSigned = require("selfsigned");
+        tlsCreds = selfSigned.generate(
+          [{ name: "commonName", value: "DewiCom-Desktop" }],
+          { days: 3650, algorithm: "sha256", keySize: 2048 }
+        );
+        console.log("[local-server] Certificat TLS auto-signé généré (mode HTTPS)");
+      } catch (e) {
+        console.warn("[local-server] selfsigned indisponible, repli sur HTTP:", e.message);
+        protocol = "http";
+      }
+    }
+
+    expressApp = express();
+    netServer  = useHttps && tlsCreds
+      ? https.createServer({ key: tlsCreds.private, cert: tlsCreds.cert }, expressApp)
+      : http.createServer(expressApp);
+    io = new socketIo(netServer, { cors: { origin: "*" } });
+
+    // ── Routes ───────────────────────────────────────────────────────────────────
     expressApp.get("/api/dewicom-discovery", (req, res) => {
-      res.json({ service: "DewiCom", version: APP_VERSION, mode: options.mode || "desktop-local" });
+      res.json({ service: "DewiCom", version: APP_VERSION, mode, protocol });
     });
 
     expressApp.get("/monitor", (req, res) => {
@@ -142,15 +194,20 @@ function start(options = {}) {
       const connectedUsers = Array.from(users.values()).map(u => ({ name: u.name, channel: u.channel }));
       res.json({
         service: "DewiCom", version: APP_VERSION,
-        mode: options.mode || "desktop-local",
+        mode, protocol,
         uptime: Math.floor(process.uptime()),
         users: connectedUsers, userCount: users.size,
       });
     });
 
+    expressApp.get("/api/logs", (req, res) => {
+      const limit = parseInt(req.query.limit || "100", 10);
+      res.json(logBuffer.slice(-limit));
+    });
+
     expressApp.get("/qr", async (req, res) => {
       const ip  = getLocalIP();
-      const url = `http://${ip}:${LOCAL_PORT}`;
+      const url = `${protocol}://${ip}:${LOCAL_PORT}`;
       try {
         const qr = await QRCode.toDataURL(url, { width: 300, margin: 2 });
         res.json({ qr, url });
@@ -161,7 +218,7 @@ function start(options = {}) {
 
     expressApp.use(express.static(PUBLIC_DIR));
 
-    // ── State (identique au vrai serveur index.js) ───────────────────────────
+    // ── État ─────────────────────────────────────────────────────────────────────
     const channels = {
       general: { name: "Général",  color: "#6b7280", users: new Map() },
       foh:     { name: "FOH Son",  color: "#3b82f6", users: new Map() },
@@ -182,18 +239,35 @@ function start(options = {}) {
     function monitorState() {
       return {
         name: "Desktop",
-        mode: options.mode || "desktop-local",
-        version: APP_VERSION,
+        mode, version: APP_VERSION,
         uptime: Math.floor(process.uptime()),
+        userCount: users.size, protocol,
       };
     }
 
-    // ── Socket.io (événements identiques au vrai serveur) ────────────────────
+    function startAudioStatsTimerLocal() {
+      if (audioStatsTimer) return;
+      audioStatsTimer = setInterval(() => {
+        if (monitorClients.size === 0) return;
+        const snap = { chunks: audioStats.chunks, bytes: audioStats.bytes, active: audioStats.activeSockets.size };
+        audioStats.chunks = 0; audioStats.bytes = 0; audioStats.activeSockets.clear();
+        for (const sid of monitorClients) {
+          const s = io.sockets.sockets.get(sid);
+          if (s) s.emit("audio-stats", snap);
+        }
+      }, 2000);
+    }
+
+    // ── Socket.io ────────────────────────────────────────────────────────────────
     io.on("connection", (socket) => {
-      console.log(`[local-server] + ${socket.id}`);
+      console.log(`[local-server] + connexion ${socket.id}`);
 
       socket.on("monitor-subscribe", () => {
+        monitorClients.add(socket.id);
+        startAudioStatsTimerLocal();
         socket.emit("monitor-state", monitorState());
+        socket.emit("log-history", logBuffer.slice(-200));
+        console.log(`[local-server] monitor-subscribe: ${socket.id}`);
       });
 
       socket.emit("channels-init", Object.entries(channels).map(([id, ch]) => ({
@@ -201,7 +275,6 @@ function start(options = {}) {
       })));
 
       socket.on("join", ({ clientId, name, channel, listenChannels = [], talkChannels = [] }) => {
-        // Nettoie toute entrée existante avec le même clientId (reconnexion après redémarrage serveur)
         for (const [oldId, oldUser] of users.entries()) {
           if (oldId !== socket.id && (clientId ? oldUser.clientId === clientId : oldUser.name === name)) {
             const oldCh = channels[oldUser.channel];
@@ -217,7 +290,7 @@ function start(options = {}) {
         listenChannels.forEach(chId => { if (chId !== channel) socket.join(chId); });
         broadcastChannelState();
         io.emit("user-joined", { name, channel });
-        console.log(`[local-server] join: ${name} → ${channel}`);
+        console.log(`[local-server] join: ${name} → ${channel} (${users.size} connecté(s))`);
       });
 
       socket.on("switch-channel", ({ channel }) => {
@@ -226,17 +299,18 @@ function start(options = {}) {
         const oldCh = channels[user.channel];
         if (oldCh) oldCh.users.delete(socket.id);
         socket.leave(user.channel);
+        const prevChannel = user.channel;
         const newCh = channels[channel] || channels.general;
         user.channel = channel;
         newCh.users.set(socket.id, user);
         socket.join(channel);
         broadcastChannelState();
+        console.log(`[local-server] switch-channel: ${user.name} ${prevChannel} → ${channel}`);
       });
 
       socket.on("audio-chunk", (payload) => {
         const user = users.get(socket.id);
         if (!user) return;
-        // payload.talkChannels prioritaire (envoyé par le client director en une seule émission)
         const talkChs = payload.talkChannels?.length ? payload.talkChannels
                       : user.talkChannels?.length    ? user.talkChannels
                       : [payload.channel || user.channel];
@@ -244,7 +318,9 @@ function start(options = {}) {
         if (chunk && Buffer.isBuffer(chunk)) {
           chunk = chunk.buffer.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength);
         }
-        // Déduplique les destinataires pour éviter envois multiples en director mode
+        audioStats.chunks++;
+        audioStats.bytes += chunk?.byteLength || 0;
+        audioStats.activeSockets.add(socket.id);
         const seen = new Set();
         talkChs.forEach(ch => {
           const room = io.sockets.adapter.rooms.get(ch);
@@ -276,7 +352,6 @@ function start(options = {}) {
       socket.on("call-ring", ({ channel, talkChannels }) => {
         const user = users.get(socket.id);
         if (!user) return;
-        // Director mode : talkChannels du payload prioritaire, sinon canal unique
         const ringChannels = talkChannels?.length ? talkChannels : [channel || user.channel];
         const targets = new Set();
         for (const [sid, u] of users) {
@@ -290,6 +365,7 @@ function start(options = {}) {
           const s = io.sockets.sockets.get(sid);
           if (s) s.emit("call-ring", { from: user.name, fromId: socket.id, channel: ringChannels[0] });
         });
+        console.log(`[local-server] call-ring: ${user.name} → canaux [${ringChannels.join(",")}]`);
       });
 
       socket.on("ptt-start", ({ channel }) => {
@@ -297,6 +373,7 @@ function start(options = {}) {
         if (!user) return;
         socket.to(channel).emit("ptt-start", { from: user.name, fromId: socket.id });
         io.emit("ptt-state", { fromId: socket.id, from: user.name, channel, speaking: true });
+        console.log(`[local-server] ptt-start: ${user.name} → ${channel}`);
       });
 
       socket.on("ptt-stop", ({ channel }) => {
@@ -304,9 +381,11 @@ function start(options = {}) {
         if (!user) return;
         socket.to(channel).emit("ptt-stop", { from: user.name, fromId: socket.id });
         io.emit("ptt-state", { fromId: socket.id, from: user.name, channel, speaking: false });
+        console.log(`[local-server] ptt-stop: ${user.name} ← ${channel}`);
       });
 
       socket.on("disconnect", () => {
+        monitorClients.delete(socket.id);
         const user = users.get(socket.id);
         if (user) {
           const ch = channels[user.channel];
@@ -314,23 +393,27 @@ function start(options = {}) {
           users.delete(socket.id);
           io.emit("user-left", { name: user.name, channel: user.channel });
           broadcastChannelState();
+          console.log(`[local-server] - déconnexion: ${user.name} (${users.size} restant(s))`);
+        } else {
+          console.log(`[local-server] - déconnexion: ${socket.id}`);
         }
-        console.log(`[local-server] - ${socket.id}`);
       });
     });
 
-    // ── Démarrage ────────────────────────────────────────────────────────────
-    httpServer.listen(LOCAL_PORT, "0.0.0.0", () => {
-      const ip = getLocalIP();
-      console.log(`[local-server] Démarré → http://127.0.0.1:${LOCAL_PORT} (réseau: http://${ip}:${LOCAL_PORT})`);
-      console.log(`[local-server] Fichiers publics: ${PUBLIC_DIR}`);
-
-      startAnnouncing(ip, LOCAL_PORT, options.mode || "desktop-local");
-
-      resolve({ url: `http://127.0.0.1:${LOCAL_PORT}`, ip, port: LOCAL_PORT, protocol: "http" });
+    // ── Démarrage ────────────────────────────────────────────────────────────────
+    netServer.listen(LOCAL_PORT, "0.0.0.0", () => {
+      const ip         = getLocalIP();
+      const localUrl   = `${protocol}://127.0.0.1:${LOCAL_PORT}`;
+      const networkUrl = `${protocol}://${ip}:${LOCAL_PORT}`;
+      console.log(`[local-server] Démarré (${protocol.toUpperCase()}) → ${localUrl}`);
+      console.log(`[local-server] Réseau     → ${networkUrl}`);
+      console.log(`[local-server] Monitoring → ${networkUrl}/monitor`);
+      console.log(`[local-server] Fichiers   → ${PUBLIC_DIR}`);
+      startAnnouncing(ip, LOCAL_PORT, mode, protocol);
+      resolve({ url: localUrl, ip, port: LOCAL_PORT, protocol });
     });
 
-    httpServer.on("error", reject);
+    netServer.on("error", reject);
   });
 }
 
@@ -340,7 +423,8 @@ function notifyRedirect(newUrl) {
 
 function stop() {
   stopAnnouncing();
-  if (httpServer) { httpServer.close(); httpServer = null; }
+  if (audioStatsTimer) { clearInterval(audioStatsTimer); audioStatsTimer = null; }
+  if (netServer) { netServer.close(); netServer = null; }
   if (io) { io.close(); io = null; }
 }
 

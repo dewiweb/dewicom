@@ -3,22 +3,9 @@ const dgram = require("dgram");
 const path = require("path");
 const os = require("os");
 
-// Traite l'origine HTTP du serveur DewiCom comme secure context → getUserMedia fonctionne sans HTTPS
-// L'origine est lue depuis server-config.json (écrit au démarrage précédent par setupMediaPermissions)
+// Accepte les certificats auto-signés des serveurs DewiCom (HTTPS self-signed)
+// Désactive la restriction réseau privé pour permettre les connexions LAN
 ;(() => {
-  try {
-    const fs = require("fs");
-    const path = require("path");
-    // app.getPath("userData") n'est pas encore disponible, on construit le chemin manuellement
-    const userDataDir = process.env.APPDATA
-      ? require("path").join(process.env.APPDATA, "dewicom-desktop")
-      : require("path").join(require("os").homedir(), ".config", "dewicom-desktop");
-    const configPath = require("path").join(userDataDir, "server-config.json");
-    const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
-    if (config.origin && config.origin.startsWith("http://")) {
-      require("electron").app.commandLine.appendSwitch("unsafely-treat-insecure-origin-as-secure", config.origin);
-    }
-  } catch (e) { /* pas de config ou déjà HTTPS : silencieux */ }
   require("electron").app.commandLine.appendSwitch("disable-features", "BlockInsecurePrivateNetworkRequests");
 })();
 
@@ -384,20 +371,19 @@ async function discoverServer() {
   });
 }
 
-// Ping rapide dédié au watchdog : HTTP only, timeout 500ms (pas de fallback HTTPS)
+// Ping rapide dédié au watchdog : essaie HTTPS puis HTTP, timeout 500ms chacun
 function pingServer(ip, port) {
-  return new Promise((resolve) => {
-    const req = require("http").get({
-      hostname: ip, port,
-      path: "/api/dewicom-discovery",
-      timeout: 500,
-    }, (res) => {
-      res.resume();
-      resolve(res.statusCode === 200);
-    });
+  const tryProto = (mod, opts) => new Promise((resolve) => {
+    const req = mod.get(opts, (res) => { res.resume(); resolve(res.statusCode === 200); });
     req.on("error", () => resolve(false));
     req.on("timeout", () => { req.destroy(); resolve(false); });
   });
+  return tryProto(require("https"), {
+    hostname: ip, port, path: "/api/dewicom-discovery",
+    timeout: 500, rejectUnauthorized: false,
+  }).then(ok => ok || tryProto(require("http"), {
+    hostname: ip, port, path: "/api/dewicom-discovery", timeout: 500,
+  }));
 }
 
 // ── Watchdog connexion serveur externe (docker/dedicated) ────────────────────
@@ -614,20 +600,9 @@ ipcMain.handle("open-settings", () => {
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 
-// Avant app.whenReady : lit la dernière origine connue et l'autorise comme secure context.
-// Cela permet à getUserMedia de fonctionner sur http://192.168.x.y:3001 dès le 2ème lancement.
-// Au premier lancement, seul localhost est autorisé (suffisant si serveur = même machine).
-{
-  const fs = require("fs");
-  const configPath = path.join(app.getPath("userData"), "server-config.json");
-  let origins = ["http://127.0.0.1:3001", "http://127.0.0.1:3002"];
-  try {
-    const saved = JSON.parse(fs.readFileSync(configPath, "utf8"));
-    if (saved.origin) origins.push(saved.origin);
-  } catch (e) { /* premier lancement */ }
-  app.commandLine.appendSwitch("unsafely-treat-insecure-origin-as-secure", origins.join(","));
-  console.log("[startup] Origines sécurisées:", origins.join(", "));
-}
+// Les serveurs DewiCom utilisent désormais HTTPS (cert auto-signé)
+// → getUserMedia fonctionne nativement sans flag insecure-origin.
+// Le flag certificate-error + setCertificateVerifyProc gèrent l'acceptation du cert self-signed.
 
 app.on("certificate-error", (event, webContents, url, error, certificate, callback) => {
   event.preventDefault();
@@ -764,16 +739,14 @@ app.whenReady().then(async () => {
 
 /**
  * Configure les permissions de la session pour autoriser micro/caméra
- * sur l'origine du serveur DewiCom, même en HTTP.
+ * sur l'origine du serveur DewiCom.
+ * Les serveurs DewiCom sont en HTTPS → getUserMedia fonctionne nativement.
+ * Les certs auto-signés sont acceptés via certificate-error + setCertificateVerifyProc.
  */
 function setupMediaPermissions(origin) {
-  // Relaunch avec le bon switch si l'origine est HTTP
-  // (commandLine doit être set avant app.ready, donc on le fait au prochain lancement
-  //  mais on force aussi via permissionRequestHandler pour la session courante)
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
     const url = webContents.getURL();
     if (permission === "media" || permission === "microphone" || permission === "camera") {
-      // Autorise si c'est notre serveur DewiCom ou localhost
       const allowed = url.startsWith(origin)
         || url.includes("127.0.0.1")
         || url.includes("localhost")
@@ -785,23 +758,15 @@ function setupMediaPermissions(origin) {
     }
   });
 
-  // Persiste l'origine pour le prochain démarrage — préserve forcedInterface
+  // Persiste l'origine pour info — préserve forcedInterface
   const fs = require("fs");
   const configPath = path.join(app.getPath("userData"), "server-config.json");
-  let previousOrigin = null;
   try {
     let config = {};
-    try { config = JSON.parse(fs.readFileSync(configPath, "utf8")); previousOrigin = config.origin || null; } catch (e) {}
+    try { config = JSON.parse(fs.readFileSync(configPath, "utf8")); } catch (e) {}
     config.origin = origin;
     fs.writeFileSync(configPath, JSON.stringify(config), "utf8");
   } catch (e) {}
-
-  // Si l'origine HTTP a changé, relancer pour que le flag Chromium soit appliqué correctement
-  if (origin.startsWith("http://") && previousOrigin !== origin) {
-    console.log(`[permissions] Origine HTTP changée (${previousOrigin} → ${origin}) — relancement pour appliquer le secure context`);
-    app.relaunch();
-    app.exit(0);
-  }
 }
 
 app.on("window-all-closed", () => {

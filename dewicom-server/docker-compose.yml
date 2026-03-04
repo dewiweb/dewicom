@@ -16,10 +16,10 @@ services:
       SERVER_MODE: ${SERVER_MODE:-docker}
       SERVER_NAME: ${SERVER_NAME:-DewiCom-Server}
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:${DEWICOM_PORT:-3001}/api/dewicom-discovery"]
+      test: ["CMD", "wget", "-qO-", "--no-check-certificate", "https://localhost:${DEWICOM_PORT:-3001}/api/dewicom-discovery"]
       interval: 10s
-      timeout: 3s
+      timeout: 5s
       retries: 3
-      start_period: 5s
+      start_period: 8s
     volumes:
       - ../shared/public:/app/public:ro   # fichiers client partagés (lecture seule)

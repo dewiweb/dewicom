@@ -4,228 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>DewiCom — Monitoring</title>
-  <style>
-    :root {
-      --bg: #080810; --surface: #10101a; --surface2: #181824; --surface3: #1e1e2e;
-      --border: #252535; --border2: #2e2e42;
-      --text: #e8e8f0; --text2: #8888aa; --muted: #44445a;
-      --green: #22c55e; --red: #ef4444; --amber: #f59e0b; --blue: #3b82f6;
-      --purple: #a855f7; --orange: #f97316; --cyan: #06b6d4;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { height: 100%; }
-    body {
-      background: var(--bg); color: var(--text);
-      font-family: 'SF Pro Display', ui-sans-serif, system-ui, sans-serif;
-      display: flex; flex-direction: column; min-height: 100vh;
-    }
-
-    /* ── Header ── */
-    header {
-      background: var(--surface); border-bottom: 1px solid var(--border);
-      padding: 10px 20px; display: flex; align-items: center; gap: 14px;
-      flex-shrink: 0; flex-wrap: wrap;
-    }
-    .logo { display: flex; align-items: center; gap: 10px; }
-    .logo-icon {
-      width: 30px; height: 30px; background: linear-gradient(135deg, #22c55e, #16a34a);
-      border-radius: 8px; display: flex; align-items: center; justify-content: center;
-      font-size: .85rem; flex-shrink: 0; box-shadow: 0 0 12px #22c55e44;
-    }
-    .logo-name { font-size: 1rem; font-weight: 900; letter-spacing: -.5px; }
-    .logo-sub { font-size: .6rem; color: var(--muted); text-transform: uppercase; letter-spacing: .15em; }
-    .header-pills { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .pill {
-      display: flex; align-items: center; gap: 6px;
-      background: var(--surface2); border: 1px solid var(--border); border-radius: 20px;
-      padding: 4px 12px; font-size: .72rem; color: var(--text2);
-    }
-    .pill strong { color: var(--text); font-weight: 600; }
-    .status-dot {
-      width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex-shrink: 0;
-      transition: background .3s, box-shadow .3s;
-    }
-    .status-dot.connected { background: var(--green); box-shadow: 0 0 8px var(--green); animation: breathe 2.5s ease-in-out infinite; }
-    .status-dot.disconnected { background: var(--red); }
-    @keyframes breathe { 0%,100% { box-shadow: 0 0 4px var(--green); } 50% { box-shadow: 0 0 14px var(--green); } }
-
-    /* ── Layout principal ── */
-    .layout {
-      flex: 1; display: grid;
-      grid-template-columns: 1fr 320px;
-      grid-template-rows: auto 1fr;
-      gap: 0; overflow: hidden;
-    }
-    @media (max-width: 900px) {
-      .layout { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr; }
-      .sidebar { border-left: none; border-top: 1px solid var(--border); max-height: 340px; }
-    }
-
-    /* ── Stats bar ── */
-    .stats-bar {
-      grid-column: 1 / -1; background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      display: flex; gap: 0; overflow-x: auto;
-    }
-    .stat-item {
-      flex: 1; min-width: 120px; padding: 12px 20px;
-      border-right: 1px solid var(--border); text-align: center;
-    }
-    .stat-item:last-child { border-right: none; }
-    .stat-label { font-size: .6rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-bottom: 4px; }
-    .stat-value { font-size: 1.6rem; font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
-    .stat-sub { font-size: .65rem; color: var(--text2); margin-top: 3px; }
-    .stat-value.pulse-anim { animation: statpulse .4s ease; }
-    @keyframes statpulse { 0% { transform: scale(1.2); } 100% { transform: scale(1); } }
-
-    /* ── Canaux ── */
-    .channels-area {
-      padding: 16px; overflow-y: auto;
-      display: flex; flex-direction: column; gap: 12px;
-    }
-    .section-title {
-      font-size: .65rem; font-weight: 700; text-transform: uppercase;
-      letter-spacing: .12em; color: var(--muted); margin-bottom: 4px;
-    }
-    .channels-grid {
-      display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px;
-    }
-
-    .channel-card {
-      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
-      overflow: hidden; transition: border-color .2s, box-shadow .2s;
-      position: relative;
-    }
-    .channel-card.has-speaker {
-      border-color: var(--ch-color, var(--green));
-      box-shadow: 0 0 16px color-mix(in srgb, var(--ch-color, var(--green)) 30%, transparent);
-    }
-    .channel-top {
-      display: flex; align-items: center; gap: 10px;
-      padding: 10px 14px 8px;
-      border-bottom: 1px solid var(--border);
-    }
-    .channel-color-bar {
-      width: 3px; height: 24px; border-radius: 2px; flex-shrink: 0;
-      background: var(--ch-color, #6b7280);
-    }
-    .channel-name { font-size: .85rem; font-weight: 700; flex: 1; }
-    .channel-badge {
-      font-size: .65rem; font-weight: 700; padding: 2px 8px; border-radius: 10px;
-      background: var(--surface2); color: var(--text2); border: 1px solid var(--border);
-      transition: background .2s, color .2s;
-    }
-    .channel-badge.active { background: var(--ch-color, var(--green)); color: #000; border-color: transparent; }
-
-    /* Barre PTT du canal */
-    .channel-ptt-bar {
-      height: 3px; background: var(--border); position: relative; overflow: hidden;
-    }
-    .channel-ptt-fill {
-      position: absolute; inset: 0; background: var(--ch-color, var(--green));
-      transform: scaleX(0); transform-origin: left;
-      transition: transform .1s ease;
-    }
-    .channel-card.has-speaker .channel-ptt-fill { animation: pttwave 1.2s ease-in-out infinite; }
-    @keyframes pttwave {
-      0%,100% { transform: scaleX(.3); opacity: .7; }
-      50% { transform: scaleX(1); opacity: 1; }
-    }
-
-    .user-list { padding: 8px 10px; display: flex; flex-direction: column; gap: 5px; min-height: 36px; }
-    .user-row {
-      display: flex; align-items: center; gap: 8px;
-      padding: 5px 8px; border-radius: 8px;
-      font-size: .78rem; transition: background .2s;
-      background: var(--surface2);
-    }
-    .user-row.speaking {
-      background: color-mix(in srgb, var(--ch-color, var(--green)) 12%, var(--surface2));
-    }
-    .user-avatar {
-      width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
-      display: flex; align-items: center; justify-content: center;
-      font-size: .65rem; font-weight: 900;
-      background: color-mix(in srgb, var(--ch-color, #6b7280) 20%, var(--surface3));
-      color: var(--ch-color, #aaa);
-      transition: box-shadow .2s;
-    }
-    .user-row.speaking .user-avatar {
-      box-shadow: 0 0 0 2px var(--ch-color, var(--green));
-      animation: avatarpulse 1s ease-in-out infinite;
-    }
-    @keyframes avatarpulse {
-      0%,100% { box-shadow: 0 0 0 2px var(--ch-color, var(--green)); }
-      50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--ch-color, var(--green)) 50%, transparent); }
-    }
-    .user-name { flex: 1; font-weight: 600; }
-
-    /* Barres de niveau audio simulées */
-    .audio-bars { display: flex; align-items: flex-end; gap: 2px; height: 14px; }
-    .audio-bar {
-      width: 3px; border-radius: 2px; background: var(--muted);
-      transition: height .08s ease, background .2s;
-    }
-    .user-row.speaking .audio-bar { background: var(--ch-color, var(--green)); }
-    .user-row.speaking .audio-bar:nth-child(1) { animation: bar1 .5s ease infinite; }
-    .user-row.speaking .audio-bar:nth-child(2) { animation: bar2 .4s ease infinite .08s; }
-    .user-row.speaking .audio-bar:nth-child(3) { animation: bar3 .6s ease infinite .04s; }
-    .user-row.speaking .audio-bar:nth-child(4) { animation: bar2 .45s ease infinite .1s; }
-    .user-row.speaking .audio-bar:nth-child(5) { animation: bar1 .55s ease infinite .06s; }
-    @keyframes bar1 { 0%,100% { height: 3px; } 50% { height: 10px; } }
-    @keyframes bar2 { 0%,100% { height: 5px; } 50% { height: 14px; } }
-    @keyframes bar3 { 0%,100% { height: 8px; } 50% { height: 12px; } }
-
-    .empty-channel { font-size: .72rem; color: var(--muted); padding: 4px 0; text-align: center; }
-
-    /* ── Sidebar journal ── */
-    .sidebar {
-      border-left: 1px solid var(--border);
-      display: flex; flex-direction: column; overflow: hidden;
-    }
-    .sidebar-header {
-      padding: 12px 16px; border-bottom: 1px solid var(--border);
-      display: flex; align-items: center; justify-content: space-between;
-      flex-shrink: 0;
-    }
-    .sidebar-title { font-size: .65rem; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
-    .clear-btn {
-      font-size: .65rem; color: var(--muted); background: none; border: none;
-      cursor: pointer; padding: 2px 8px; border-radius: 4px;
-      transition: color .2s, background .2s;
-    }
-    .clear-btn:hover { color: var(--text); background: var(--surface2); }
-    .events-list { list-style: none; flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 2px; }
-    .event-row {
-      display: flex; align-items: flex-start; gap: 8px;
-      padding: 6px 8px; border-radius: 7px; font-size: .74rem;
-      transition: background .15s;
-    }
-    .event-row:hover { background: var(--surface2); }
-    .event-dot { font-size: .5rem; flex-shrink: 0; margin-top: 4px; }
-    .event-time { color: var(--muted); font-size: .67rem; flex-shrink: 0; font-variant-numeric: tabular-nums; white-space: nowrap; }
-    .event-text { flex: 1; line-height: 1.4; }
-    .event-text em { font-style: normal; font-weight: 700; }
-    .event-join  .event-dot { color: var(--green); }
-    .event-leave .event-dot { color: var(--red); }
-    .event-ptt   .event-dot { color: var(--amber); }
-    .event-info  .event-dot { color: var(--blue); }
-
-    /* ── Overlay déconnexion ── */
-    .no-connection {
-      position: fixed; inset: 0; background: rgba(0,0,0,.88);
-      display: none; flex-direction: column; align-items: center; justify-content: center;
-      gap: 14px; z-index: 100;
-    }
-    .no-connection.visible { display: flex; }
-    .no-connection h3 { font-size: 1.1rem; }
-    .no-connection p { color: var(--text2); font-size: .82rem; }
-    .spinner {
-      width: 36px; height: 36px; border: 3px solid var(--border);
-      border-top-color: var(--green); border-radius: 50%; animation: spin 1s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-  </style>
+  <link rel="stylesheet" href="/monitor.css" />
 </head>
 <body>
 
@@ -241,6 +20,7 @@
     <div class="pill"><span class="status-dot" id="connDot"></span><span id="connLabel">Connexion...</span></div>
     <div class="pill">Serveur : <strong id="serverName">—</strong></div>
     <div class="pill">Mode : <strong id="serverMode">—</strong></div>
+    <div class="pill">Proto : <strong id="serverProto">—</strong></div>
     <div class="pill">v<strong id="serverVersion">—</strong></div>
     <div class="pill">⏱ <strong id="serverUptime">—</strong></div>
   </div>
@@ -270,16 +50,52 @@
       <div class="stat-sub">depuis démarrage</div>
     </div>
     <div class="stat-item">
+      <div class="stat-label">Audio chunks/2s</div>
+      <div class="stat-value" id="statAudioChunks">0</div>
+      <div class="stat-sub" id="statAudioKB">0 KB</div>
+    </div>
+    <div class="stat-item">
       <div class="stat-label">Événements</div>
       <div class="stat-value" id="statEvents">0</div>
       <div class="stat-sub">connexions / départs</div>
     </div>
   </div>
 
-  <!-- Canaux -->
-  <div class="channels-area">
-    <div class="section-title">Canaux</div>
-    <div class="channels-grid" id="channelsGrid"></div>
+  <!-- Zone principale -->
+  <div class="main-area">
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="channels" onclick="switchTab('channels')">Canaux</button>
+      <button class="tab-btn" data-tab="logs" onclick="switchTab('logs')">
+        Console <span class="tab-badge" id="logBadge">0</span>
+      </button>
+    </div>
+
+    <!-- Onglet canaux -->
+    <div class="tab-panel active" id="tab-channels">
+      <div class="channels-area">
+        <div class="section-title">Canaux</div>
+        <div class="channels-grid" id="channelsGrid"></div>
+      </div>
+    </div>
+
+    <!-- Onglet logs console -->
+    <div class="tab-panel" id="tab-logs">
+      <div class="logs-area">
+        <div class="logs-toolbar">
+          <button class="filter-btn active" data-level="all"   onclick="setLogFilter('all')">Tous</button>
+          <button class="filter-btn"        data-level="info"  onclick="setLogFilter('info')">INFO</button>
+          <button class="filter-btn"        data-level="warn"  onclick="setLogFilter('warn')">WARN</button>
+          <button class="filter-btn"        data-level="error" onclick="setLogFilter('error')">ERROR</button>
+          <button class="filter-btn"        data-level="audio" onclick="setLogFilter('audio')">AUDIO</button>
+          <label class="logs-autoscroll">
+            <input type="checkbox" id="autoScrollChk" checked onchange="logAutoScroll=this.checked" />
+            Auto-scroll
+          </label>
+          <button class="clear-logs-btn" onclick="clearLogs()">Effacer</button>
+        </div>
+        <div class="logs-list" id="logsList"></div>
+      </div>
+    </div>
   </div>
 
   <!-- Sidebar journal -->
@@ -299,173 +115,6 @@
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
-<script>
-  let channelDefs   = {};
-  let channelState  = {};
-  let speakingUsers = new Set();
-  let pttCount = 0, eventCount = 0;
-  let startTime = null, uptimeTimer = null;
-
-  const socket = io({ reconnectionDelay: 1000, reconnectionDelayMax: 3000 });
-
-  socket.on("connect", () => {
-    setConnected(true);
-    addEvent("info", "Connecté au serveur");
-    socket.emit("monitor-subscribe");
-  });
-  socket.on("disconnect", () => {
-    setConnected(false);
-    addEvent("info", "Déconnecté du serveur");
-  });
-
-  socket.on("channels-init", (list) => {
-    channelDefs = {};
-    list.forEach(ch => { channelDefs[ch.id] = { name: ch.name, color: ch.color }; });
-    renderChannels();
-  });
-
-  socket.on("channel-state", (state) => {
-    channelState = state;
-    renderChannels();
-    updateStats();
-  });
-
-  socket.on("monitor-state", (data) => {
-    document.getElementById("serverName").textContent    = data.name    || "—";
-    document.getElementById("serverMode").textContent    = data.mode    || "—";
-    document.getElementById("serverVersion").textContent = data.version || "—";
-    startTime = Date.now() - (data.uptime * 1000);
-    updateUptime();
-    if (uptimeTimer) clearInterval(uptimeTimer);
-    uptimeTimer = setInterval(updateUptime, 1000);
-  });
-
-  socket.on("user-joined", ({ name, channel }) => {
-    eventCount++;
-    addEvent("join", `<em>${name}</em> a rejoint ${chanName(channel)}`);
-    updateStats();
-  });
-  socket.on("user-left", ({ name, channel }) => {
-    eventCount++;
-    addEvent("leave", `<em>${name}</em> a quitté ${chanName(channel)}`);
-    updateStats();
-  });
-
-  socket.on("ptt-state", ({ from, channel, speaking }) => {
-    if (speaking) {
-      speakingUsers.add(from);
-      pttCount++;
-      addEvent("ptt", `<em>${from}</em> parle → ${chanName(channel)}`);
-    } else {
-      speakingUsers.delete(from);
-    }
-    renderChannels();
-    updateStats();
-  });
-
-  // ── Rendu canaux ─────────────────────────────────────────────────────────
-  function chanName(id) {
-    return (channelDefs[id] && channelDefs[id].name) || id;
-  }
-
-  function renderChannels() {
-    const grid = document.getElementById("channelsGrid");
-    const ids = Object.keys(channelDefs).length ? Object.keys(channelDefs) : Object.keys(channelState);
-    if (!ids.length) return;
-
-    grid.innerHTML = ids.map(id => {
-      const def   = channelDefs[id]  || {};
-      const state = channelState[id] || {};
-      const users = state.users || [];
-      const color = def.color || "#6b7280";
-      const count = users.length;
-      const hasSpeaker = users.some(u => speakingUsers.has(u.name));
-
-      const usersHtml = count === 0
-        ? `<div class="empty-channel">— vide —</div>`
-        : users.map(u => {
-            const speaking = speakingUsers.has(u.name);
-            return `<div class="user-row ${speaking ? 'speaking' : ''}" style="--ch-color:${color}">
-              <div class="user-avatar">${(u.name||'?')[0].toUpperCase()}</div>
-              <div class="user-name">${u.name}</div>
-              <div class="audio-bars">
-                <div class="audio-bar" style="height:3px"></div>
-                <div class="audio-bar" style="height:5px"></div>
-                <div class="audio-bar" style="height:8px"></div>
-                <div class="audio-bar" style="height:5px"></div>
-                <div class="audio-bar" style="height:3px"></div>
-              </div>
-            </div>`;
-          }).join('');
-
-      return `<div class="channel-card ${hasSpeaker ? 'has-speaker' : ''}" style="--ch-color:${color}">
-        <div class="channel-top">
-          <div class="channel-color-bar"></div>
-          <div class="channel-name">${def.name || id}</div>
-          <div class="channel-badge ${count > 0 ? 'active' : ''}">${count}</div>
-        </div>
-        <div class="channel-ptt-bar"><div class="channel-ptt-fill"></div></div>
-        <div class="user-list">${usersHtml}</div>
-      </div>`;
-    }).join('');
-  }
-
-  // ── Stats ─────────────────────────────────────────────────────────────────
-  function updateStats() {
-    let totalUsers = 0, activeChannels = 0;
-    for (const id in channelState) {
-      const u = (channelState[id].users || []).length;
-      totalUsers += u;
-      if (u > 0) activeChannels++;
-    }
-    setStatAnimated("statUsers", totalUsers);
-    setStatAnimated("statActiveChannels", activeChannels);
-    setStatAnimated("statSpeaking", speakingUsers.size);
-    document.getElementById("statPtt").textContent    = pttCount;
-    document.getElementById("statEvents").textContent = eventCount;
-  }
-
-  function setStatAnimated(id, val) {
-    const el = document.getElementById(id);
-    if (el.textContent !== String(val)) {
-      el.textContent = val;
-      el.classList.remove("pulse-anim");
-      void el.offsetWidth;
-      el.classList.add("pulse-anim");
-    }
-  }
-
-  function updateUptime() {
-    if (!startTime) return;
-    const s = Math.floor((Date.now() - startTime) / 1000);
-    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
-    document.getElementById("serverUptime").textContent =
-      h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m ${sec}s` : `${sec}s`;
-  }
-
-  // ── Journal ───────────────────────────────────────────────────────────────
-  function addEvent(type, text) {
-    const list = document.getElementById("eventsList");
-    const time = new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-    const li = document.createElement("li");
-    li.className = `event-row event-${type}`;
-    li.innerHTML = `<span class="event-dot">●</span><span class="event-time">${time}</span><span class="event-text">${text}</span>`;
-    list.prepend(li);
-    while (list.children.length > 150) list.removeChild(list.lastChild);
-  }
-
-  function clearEvents() {
-    document.getElementById("eventsList").innerHTML = "";
-    eventCount = 0;
-    document.getElementById("statEvents").textContent = "0";
-  }
-
-  // ── Connexion UI ──────────────────────────────────────────────────────────
-  function setConnected(ok) {
-    document.getElementById("connDot").className   = `status-dot ${ok ? "connected" : "disconnected"}`;
-    document.getElementById("connLabel").textContent = ok ? "Connecté" : "Déconnecté";
-    document.getElementById("noConn").classList.toggle("visible", !ok);
-  }
-</script>
+<script src="/monitor.js"></script>
 </body>
 </html>

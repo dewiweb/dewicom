@@ -4,17 +4,18 @@
  * Compatible avec tous les clients : APK Android, Desktop Electron, navigateur.
  *
  * Variables d'environnement :
- *   PORT          Port HTTP + WebSocket (défaut : 3001)
+ *   PORT          Port HTTPS + WebSocket (défaut : 3001)
  *   BIND_IP       IP d'écoute (défaut : 0.0.0.0)
  *   SERVER_MODE   Mode annoncé aux clients : "docker" | "dedicated" (défaut : "dedicated")
  *   SERVER_NAME   Nom affiché dans les clients (défaut : hostname)
  */
 
-const http   = require("http");
-const path   = require("path");
-const os     = require("os");
-const dgram  = require("dgram");
-const fs     = require("fs");
+const https      = require("https");
+const path       = require("path");
+const os         = require("os");
+const dgram      = require("dgram");
+const fs         = require("fs");
+const selfsigned = require("selfsigned");
 
 const express  = require("express");
 const socketIo = require("socket.io").Server;
@@ -41,6 +42,46 @@ const PUBLIC_DIR = (() => {
   }
   return path.join(__dirname, "../shared/public");
 })();
+
+// ── Certificat TLS auto-signé (généré au démarrage) ───────────────────────────
+// getUserMedia requiert un secure context (HTTPS ou localhost).
+// Le cert auto-signé est accepté par Electron (setCertificateVerifyProc)
+// et par l'APK Android (SSLConfigurator + onReceivedSslError).
+// Pour les navigateurs desktop : acceptation manuelle une seule fois.
+const TLS_ATTRS = [{ name: "commonName", value: "DewiCom" }];
+const TLS_OPTS  = { days: 3650, algorithm: "sha256", keySize: 2048 };
+const tlsPems   = selfsigned.generate(TLS_ATTRS, TLS_OPTS);
+console.log("[server] Certificat TLS auto-signé généré (valide 10 ans)");
+
+// ── Logging centralisé — diffuse vers console ET clients monitor ───────────────
+const LOG_BUFFER_MAX = 500;
+const logBuffer      = [];       // historique des logs
+const monitorClients = new Set(); // socket IDs abonnés au monitoring
+
+const _origLog   = console.log.bind(console);
+const _origWarn  = console.warn.bind(console);
+const _origError = console.error.bind(console);
+
+function serverLog(level, msg) {
+  const entry = { ts: Date.now(), level, msg };
+  logBuffer.push(entry);
+  if (logBuffer.length > LOG_BUFFER_MAX) logBuffer.shift();
+  // Broadcast aux clients monitor abonnés
+  if (io) {
+    for (const sid of monitorClients) {
+      const s = io.sockets.sockets.get(sid);
+      if (s) s.emit("server-log", entry);
+    }
+  }
+}
+
+console.log   = (...a) => { const m = a.map(x => typeof x === "object" ? JSON.stringify(x) : String(x)).join(" "); _origLog(m);   serverLog("info",  m); };
+console.warn  = (...a) => { const m = a.map(x => typeof x === "object" ? JSON.stringify(x) : String(x)).join(" "); _origWarn(m);  serverLog("warn",  m); };
+console.error = (...a) => { const m = a.map(x => typeof x === "object" ? JSON.stringify(x) : String(x)).join(" "); _origError(m); serverLog("error", m); };
+
+// ── Audio stats (mis à jour par le handler audio-chunk) ───────────────────────
+const audioStats = { chunks: 0, bytes: 0, activeSockets: new Set() };
+let audioStatsTimer = null;
 
 // ── Détection IP réseau ───────────────────────────────────────────────────────
 
@@ -74,8 +115,8 @@ function startAnnouncing(ip, port) {
       service: "DewiCom",
       version: VERSION,
       ip, port,
-      protocol: "http",
-      mode: SERVER_MODE,   // "docker" ou "dedicated" → priorité haute dans la découverte client
+      protocol: "https",           // HTTPS désormais
+      mode: SERVER_MODE,
       name: SERVER_NAME,
     }));
     const send = () => {
@@ -86,8 +127,8 @@ function startAnnouncing(ip, port) {
     sock.bind(() => {
       sock.setMulticastTTL(4);
       send();
-      setInterval(send, 1000);  // 1s pour réduire le délai de découverte
-      console.log(`[server] Annonces multicast → ${ip}:${port} (mode=${SERVER_MODE})`);
+      setInterval(send, 1000);
+      console.log(`[server] Annonces multicast → ${ip}:${port} (mode=${SERVER_MODE}, proto=https)`);
     });
     sock.on("error", (e) => console.warn("[server] Multicast socket error:", e.message));
   } catch (e) {
@@ -107,13 +148,14 @@ const channels = {
 };
 const users = new Map();
 
-// ── Serveur HTTP + Socket.io ──────────────────────────────────────────────────
+// ── Serveur HTTPS + Socket.io ─────────────────────────────────────────────────
 
-const app        = express();
-const httpServer = http.createServer(app);
-const io         = new socketIo(httpServer, { cors: { origin: "*" } });
+const app         = express();
+const httpsServer = https.createServer({ key: tlsPems.private, cert: tlsPems.cert }, app);
+let io            = null; // initialisé après httpsServer
+io                = new socketIo(httpsServer, { cors: { origin: "*" } });
 
-// ── Routes HTTP ───────────────────────────────────────────────────────────────
+// ── Routes ────────────────────────────────────────────────────────────────────
 
 app.get("/api/dewicom-discovery", (req, res) => {
   res.json({
@@ -131,14 +173,11 @@ app.get("/monitor", (req, res) => {
 
 app.get("/api/status", (req, res) => {
   const connectedUsers = Array.from(users.values()).map(u => ({
-    name: u.name,
-    channel: u.channel,
+    name: u.name, channel: u.channel,
   }));
   res.json({
-    service: "DewiCom",
-    version: VERSION,
-    mode: SERVER_MODE,
-    name: SERVER_NAME,
+    service: "DewiCom", version: VERSION,
+    mode: SERVER_MODE, name: SERVER_NAME,
     uptime: Math.floor(process.uptime()),
     users: connectedUsers,
     channelCount: Object.keys(channels).length,
@@ -146,9 +185,14 @@ app.get("/api/status", (req, res) => {
   });
 });
 
+app.get("/api/logs", (req, res) => {
+  const limit = parseInt(req.query.limit || "100", 10);
+  res.json(logBuffer.slice(-limit));
+});
+
 app.get("/qr", async (req, res) => {
   const ip  = getLocalIP();
-  const url = `http://${ip}:${PORT}`;
+  const url = `https://${ip}:${PORT}`;
   try {
     const qr = await QRCode.toDataURL(url, { width: 300, margin: 2 });
     res.json({ qr, url });
@@ -178,14 +222,41 @@ function monitorState() {
     mode: SERVER_MODE,
     version: VERSION,
     uptime: Math.floor(process.uptime()),
+    userCount: users.size,
+    protocol: "https",
   };
 }
 
+// Démarre le timer broadcast audio stats vers les clients monitor
+function startAudioStatsTimer() {
+  if (audioStatsTimer) return;
+  audioStatsTimer = setInterval(() => {
+    if (monitorClients.size === 0) return;
+    const snap = {
+      chunks: audioStats.chunks,
+      bytes:  audioStats.bytes,
+      active: audioStats.activeSockets.size,
+    };
+    audioStats.chunks = 0;
+    audioStats.bytes  = 0;
+    audioStats.activeSockets.clear();
+    for (const sid of monitorClients) {
+      const s = io.sockets.sockets.get(sid);
+      if (s) s.emit("audio-stats", snap);
+    }
+  }, 2000);
+}
+
 io.on("connection", (socket) => {
-  console.log(`[server] + ${socket.id}`);
+  console.log(`[server] + connexion ${socket.id}`);
 
   socket.on("monitor-subscribe", () => {
+    monitorClients.add(socket.id);
+    startAudioStatsTimer();
     socket.emit("monitor-state", monitorState());
+    // Envoie l'historique des logs au nouvel abonné
+    socket.emit("log-history", logBuffer.slice(-200));
+    console.log(`[server] monitor-subscribe: ${socket.id} (${monitorClients.size} abonnés)`);
   });
 
   socket.emit("channels-init", Object.entries(channels).map(([id, ch]) => ({
@@ -193,7 +264,6 @@ io.on("connection", (socket) => {
   })));
 
   socket.on("join", ({ clientId, name, channel, listenChannels = [], talkChannels = [] }) => {
-    // Nettoie toute entrée existante avec le même clientId (reconnexion après coupure)
     for (const [oldId, oldUser] of users.entries()) {
       if (oldId !== socket.id && (clientId ? oldUser.clientId === clientId : oldUser.name === name)) {
         const oldCh = channels[oldUser.channel];
@@ -209,7 +279,7 @@ io.on("connection", (socket) => {
     listenChannels.forEach(chId => { if (chId !== channel) socket.join(chId); });
     broadcastChannelState();
     io.emit("user-joined", { name, channel });
-    console.log(`[server] join: ${name} → ${channel}`);
+    console.log(`[server] join: ${name} → ${channel} (${users.size} connecté(s))`);
   });
 
   socket.on("switch-channel", ({ channel }) => {
@@ -219,10 +289,12 @@ io.on("connection", (socket) => {
     if (oldCh) oldCh.users.delete(socket.id);
     socket.leave(user.channel);
     const newCh = channels[channel] || channels.general;
+    const prevChannel = user.channel;
     user.channel = channel;
     newCh.users.set(socket.id, user);
     socket.join(channel);
     broadcastChannelState();
+    console.log(`[server] switch-channel: ${user.name} ${prevChannel} → ${channel}`);
   });
 
   socket.on("audio-chunk", (payload) => {
@@ -235,6 +307,11 @@ io.on("connection", (socket) => {
     if (chunk && Buffer.isBuffer(chunk)) {
       chunk = chunk.buffer.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength);
     }
+    // Comptabilise les stats audio
+    audioStats.chunks++;
+    audioStats.bytes += chunk?.byteLength || 0;
+    audioStats.activeSockets.add(socket.id);
+
     const seen = new Set();
     talkChs.forEach(ch => {
       const room = io.sockets.adapter.rooms.get(ch);
@@ -279,6 +356,7 @@ io.on("connection", (socket) => {
       const s = io.sockets.sockets.get(sid);
       if (s) s.emit("call-ring", { from: user.name, fromId: socket.id, channel: ringChannels[0] });
     });
+    console.log(`[server] call-ring: ${user.name} → canaux [${ringChannels.join(",")}]`);
   });
 
   socket.on("ptt-start", ({ channel }) => {
@@ -286,6 +364,7 @@ io.on("connection", (socket) => {
     if (!user) return;
     socket.to(channel).emit("ptt-start", { from: user.name, fromId: socket.id });
     io.emit("ptt-state", { fromId: socket.id, from: user.name, channel, speaking: true });
+    console.log(`[server] ptt-start: ${user.name} → ${channel}`);
   });
 
   socket.on("ptt-stop", ({ channel }) => {
@@ -293,9 +372,11 @@ io.on("connection", (socket) => {
     if (!user) return;
     socket.to(channel).emit("ptt-stop", { from: user.name, fromId: socket.id });
     io.emit("ptt-state", { fromId: socket.id, from: user.name, channel, speaking: false });
+    console.log(`[server] ptt-stop: ${user.name} ← ${channel}`);
   });
 
   socket.on("disconnect", () => {
+    monitorClients.delete(socket.id);
     const user = users.get(socket.id);
     if (user) {
       const ch = channels[user.channel];
@@ -303,19 +384,22 @@ io.on("connection", (socket) => {
       users.delete(socket.id);
       io.emit("user-left", { name: user.name, channel: user.channel });
       broadcastChannelState();
+      console.log(`[server] - déconnexion: ${user.name} (${users.size} connecté(s) restant(s))`);
+    } else {
+      console.log(`[server] - déconnexion: ${socket.id}`);
     }
-    console.log(`[server] - ${socket.id}`);
   });
 });
 
 // ── Démarrage ─────────────────────────────────────────────────────────────────
 
-httpServer.listen(PORT, BIND_IP, () => {
+httpsServer.listen(PORT, BIND_IP, () => {
   const ip = getLocalIP();
   console.log(`[server] DewiCom Server v${VERSION} (${SERVER_MODE}) — ${SERVER_NAME}`);
-  console.log(`[server] HTTP + WS → http://${BIND_IP}:${PORT}`);
-  console.log(`[server] Réseau    → http://${ip}:${PORT}`);
-  console.log(`[server] Fichiers  → ${PUBLIC_DIR}`);
+  console.log(`[server] HTTPS + WSS → https://${BIND_IP}:${PORT}`);
+  console.log(`[server] Réseau      → https://${ip}:${PORT}`);
+  console.log(`[server] Monitoring  → https://${ip}:${PORT}/monitor`);
+  console.log(`[server] Fichiers    → ${PUBLIC_DIR}`);
   startAnnouncing(ip, PORT);
 });
 
@@ -323,7 +407,8 @@ httpServer.listen(PORT, BIND_IP, () => {
 
 function shutdown() {
   console.log("[server] Arrêt propre...");
-  httpServer.close(() => process.exit(0));
+  if (audioStatsTimer) { clearInterval(audioStatsTimer); audioStatsTimer = null; }
+  httpsServer.close(() => process.exit(0));
   setTimeout(() => process.exit(0), 3000);
 }
 process.on("SIGTERM", shutdown);

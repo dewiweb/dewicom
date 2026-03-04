@@ -184,7 +184,7 @@ public class MainActivity extends Activity {
         container.addView(input);
 
         TextView hint = new TextView(this);
-        hint.setText("Entrez l'IP ou l'URL du serveur DewiCom\n(ex: 192.168.1.10  ou  http://192.168.1.10:3001)");
+        hint.setText("Entrez l'IP ou l'URL du serveur DewiCom\n(ex: 192.168.1.10  ou  https://192.168.1.10:3001)");
         hint.setTextSize(12);
         hint.setTextColor(0xFF888888);
         hint.setPadding(0, dp(8), 0, 0);
@@ -270,11 +270,11 @@ public class MainActivity extends Activity {
 
     private String normalizeUrl(String raw) {
         if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
-        // IP seule ou IP:port
+        // IP seule ou IP:port → HTTPS par défaut (cert auto-signé accepté via onReceivedSslError)
         if (raw.contains(":") && !raw.startsWith("http")) {
-            return "http://" + raw;
+            return "https://" + raw;
         }
-        return "http://" + raw + ":" + DEFAULT_PORT;
+        return "https://" + raw + ":" + DEFAULT_PORT;
     }
 
     private int dp(int dp) {
