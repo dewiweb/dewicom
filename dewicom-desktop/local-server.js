@@ -1,7 +1,7 @@
 /**
  * Serveur local embarqué dans l'app desktop.
- * - mode desktop-local : HTTP sur 127.0.0.1 (localhost = secure context, micro OK)
- * - mode dedicated / desktop-server : HTTPS avec cert auto-signé (clients LAN besoin secure context)
+ * Toujours HTTPS (cert auto-signé) : getUserMedia requiert un secure context,
+ * y compris pour les clients LAN qui se connectent via l'IP réseau.
  */
 
 const http       = require("http");
@@ -152,31 +152,26 @@ function start(options = {}) {
       }
     }
 
-    // HTTPS pour les modes servant d'autres appareils LAN (getUserMedia requiert secure context)
-    // HTTP pour desktop-local : 127.0.0.1 est toujours un secure context
     const mode     = options.mode || "desktop-local";
-    const useHttps = (mode === "dedicated" || mode === "desktop-server");
-    let   protocol = useHttps ? "https" : "http";
+    let   protocol = "https";
     let   tlsCreds = null;
 
-    if (useHttps) {
-      try {
-        let selfSigned;
-        try { selfSigned = require(path.join(modulesPath, "selfsigned")); } catch (_) {}
-        if (!selfSigned) selfSigned = require("selfsigned");
-        tlsCreds = selfSigned.generate(
-          [{ name: "commonName", value: "DewiCom-Desktop" }],
-          { days: 3650, algorithm: "sha256", keySize: 2048 }
-        );
-        console.log("[local-server] Certificat TLS auto-signé généré (mode HTTPS)");
-      } catch (e) {
-        console.warn("[local-server] selfsigned indisponible, repli sur HTTP:", e.message);
-        protocol = "http";
-      }
+    try {
+      let selfSigned;
+      try { selfSigned = require(path.join(modulesPath, "selfsigned")); } catch (_) {}
+      if (!selfSigned) selfSigned = require("selfsigned");
+      tlsCreds = selfSigned.generate(
+        [{ name: "commonName", value: "DewiCom-Desktop" }],
+        { days: 3650, algorithm: "sha256", keySize: 2048 }
+      );
+      console.log("[local-server] Certificat TLS auto-signé généré");
+    } catch (e) {
+      console.warn("[local-server] selfsigned indisponible, repli sur HTTP:", e.message);
+      protocol = "http";
     }
 
     expressApp = express();
-    netServer  = useHttps && tlsCreds
+    netServer  = tlsCreds
       ? https.createServer({ key: tlsCreds.private, cert: tlsCreds.cert }, expressApp)
       : http.createServer(expressApp);
     io = new socketIo(netServer, { cors: { origin: "*" } });

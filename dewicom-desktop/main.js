@@ -289,7 +289,7 @@ async function startDedicatedServer() {
     localServerRunning = true;
     console.log(`[server-mode] Serveur dédié actif → ${loc.url} (réseau: ${loc.ip}:${loc.port})`);
     sendToWindow("discovery-status", `Serveur dédié actif — ${loc.ip}:${loc.port}`);
-    return { ip: "127.0.0.1", port: loc.port, protocol: "http" };
+    return { ip: "127.0.0.1", port: loc.port, protocol: loc.protocol };
   } catch (e) {
     // Port occupé ou autre erreur — tentative de découverte fallback
     console.warn("[server-mode] Impossible de démarrer le serveur dédié:", e.message, "— fallback découverte LAN");
@@ -312,31 +312,37 @@ async function discoverServer() {
         console.log(`[election] LEADER élu: ${myIP} — démarrage serveur local`);
         sendToWindow("discovery-status", `Leader élu — démarrage serveur...`);
         // Démarre le serveur uniquement quand on est sûr d'être leader
+        let localProto = "https";
         if (!localServerRunning) {
           try {
             const loc = await localServer.start();
             localServerRunning = true;
+            localProto = loc.protocol;
             console.log(`[discovery] Serveur démarré: ${loc.url} (réseau: ${loc.ip}:${loc.port})`);
             sendToWindow("discovery-status", `Leader — serveur actif sur ${myIP}:3001`);
           } catch (e) {
             console.error("[discovery] Impossible de démarrer le serveur:", e.message);
-            // Port occupé ? L'autre nœud est peut-être encore leader — on réessaie dans 1s
             await new Promise(r => setTimeout(r, 1000));
-            try { await localServer.start(); localServerRunning = true; } catch (e2) {
+            try {
+              const loc2 = await localServer.start();
+              localServerRunning = true;
+              localProto = loc2.protocol;
+            } catch (e2) {
               console.error("[discovery] Échec définitif serveur:", e2.message);
             }
           }
         }
-        const localServer_ = { ip: "127.0.0.1", port: 3001, protocol: "http" };
+        const localServer_ = { ip: "127.0.0.1", port: 3001, protocol: localProto };
         if (!resolved) {
           resolved = true;
           resolve(localServer_);
         } else {
           // Ré-élection : reprend le leadership après avoir été follower
-          console.log(`[election] RE-LEADER: rechargement WebView sur 127.0.0.1:3001`);
+          const localUrl = `${localProto}://127.0.0.1:3001`;
+          console.log(`[election] RE-LEADER: rechargement WebView sur ${localUrl}`);
           discoveredServer = localServer_;
-          setupMediaPermissions("http://127.0.0.1:3001");
-          if (mainWindow && !mainWindow.isDestroyed()) mainWindow.loadURL("http://127.0.0.1:3001");
+          setupMediaPermissions(localUrl);
+          if (mainWindow && !mainWindow.isDestroyed()) mainWindow.loadURL(localUrl);
         }
       },
       onLeaderElected: async (leaderIP) => {
