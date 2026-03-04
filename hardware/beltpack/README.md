@@ -15,11 +15,21 @@ Boîtier beltpack pour intercom WiFi DewiCom.
 | Réseau | RJ45 + PoE | Ethernet filaire + alimentation |
 | Charge | USB-C | Alimentation / recharge de secours |
 
-## Dimensions boîtier
+## Dimensions boîtier (v2 — après audit volumétrique)
 
 ```
-130 × 72 × 36 mm  (avec clip ceinture : +6mm côté droit)
+155 × 90 × 42 mm  (avec clip ceinture : +6mm côté droit)
 ```
+
+Format beltpack pro standard (comparable Clear-Com, RTS). Raisons du changement vs v1 (130×72×36mm) :
+- Stack RPi Zero 2W + HATs GPIO = ~35mm de hauteur → incompatible avec 36mm
+- Connecteur XLR5 traversant NC5FD-L = 35mm d'empiètement → boîtier trop fin
+- LiPo 2000mAh impossible à loger côte à côte avec le stack
+
+**Solutions adoptées :**
+- Dimensions augmentées à 155×90×42mm
+- HATs reliés par câble plat FFC au lieu d'empilement GPIO direct → disposés côte à côte (±12mm de hauteur max)
+- XLR5 **coudé** Neutrik NC5MPR (empiètement 12mm vs 35mm) sur la face inférieure
 
 ## Fichiers CAO
 
