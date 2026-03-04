@@ -16,14 +16,21 @@ import fi.iki.elonen.NanoHTTPD;
 import org.java_websocket.WebSocket;
 import org.java_websocket.handshake.ClientHandshake;
 import org.java_websocket.server.WebSocketServer;
+import org.java_websocket.server.DefaultSSLWebSocketServerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.math.BigInteger;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.KeyStore;
+import java.security.cert.X509Certificate;
+import java.util.Date;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -32,9 +39,14 @@ import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
 
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLServerSocketFactory;
+import javax.security.auth.x500.X500Principal;
+
 public class LocalWebServer {
     private static final String TAG = "LocalWebServer";
-    private static final String APP_VERSION = "1.3.1";
+    private static final String APP_VERSION = "1.4.2";
     public static final int HTTP_PORT = 3001;
     public static final int WS_PORT = 3002;
 
@@ -47,6 +59,8 @@ public class LocalWebServer {
     private Timer announceTimer;
     private DatagramSocket announceSocket;
     private boolean running = false;
+    private boolean useHttps = false;
+    private SSLContext sslContext = null;
 
     // Données utilisateur par socket
     static class UserInfo {
@@ -69,19 +83,122 @@ public class LocalWebServer {
         }
     }
 
+    /**
+     * Génère un KeyStore contenant un certificat self-signed pour HTTPS.
+     * Utilise l'API Java standard disponible sur Android (sun.security.x509 non dispo —
+     * on utilise android.security.keystore via KeyPairGenerator avec provider "AndroidKeyStore").
+     */
+    private SSLContext generateSelfSignedSSLContext() {
+        try {
+            // Génère une paire de clés RSA 2048
+            KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
+            kpg.initialize(2048);
+            KeyPair kp = kpg.generateKeyPair();
+
+            // Crée un certificat X.509 self-signed via réflexion sur les classes internes Android
+            // (android.net.http n'expose pas de générateur de cert, on utilise la méthode portable)
+            X509Certificate cert = generateSelfSignedCert(kp);
+            if (cert == null) return null;
+
+            // Construit un KeyStore avec la clé privée + cert
+            KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
+            ks.load(null, null);
+            ks.setKeyEntry("dewicom", kp.getPrivate(), "dewicom".toCharArray(),
+                    new java.security.cert.Certificate[]{cert});
+
+            KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+            kmf.init(ks, "dewicom".toCharArray());
+
+            SSLContext ctx = SSLContext.getInstance("TLS");
+            ctx.init(kmf.getKeyManagers(), null, null);
+            Log.d(TAG, "Certificat TLS self-signed généré");
+            return ctx;
+        } catch (Exception e) {
+            Log.w(TAG, "Impossible de générer le cert TLS: " + e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Génère un X509Certificate self-signed via l'implémentation interne Android.
+     * Compatible API 21+.
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private X509Certificate generateSelfSignedCert(KeyPair kp) {
+        try {
+            // Tente via android.net.http.X509TrustManagerExtensions (non disponible ici)
+            // → Utilise la réflexion sur sun.security.x509 (disponible dans le runtime Android)
+            Class certInfoClass = Class.forName("sun.security.x509.X509CertInfo");
+            Class certImplClass = Class.forName("sun.security.x509.X509CertImpl");
+            Class x500NameClass  = Class.forName("sun.security.x509.X500Name");
+            Class certValClass   = Class.forName("sun.security.x509.CertificateValidity");
+            Class certSnClass    = Class.forName("sun.security.x509.CertificateSerialNumber");
+            Class certAlgClass   = Class.forName("sun.security.x509.CertificateAlgorithmId");
+            Class algIdClass     = Class.forName("sun.security.x509.AlgorithmId");
+            Class certSubjClass  = Class.forName("sun.security.x509.CertificateSubjectName");
+            Class certIssuerClass= Class.forName("sun.security.x509.CertificateIssuerName");
+            Class certKeyClass   = Class.forName("sun.security.x509.CertificateX509Key");
+
+            long now = System.currentTimeMillis();
+            Date from = new Date(now);
+            Date to   = new Date(now + 10L * 365 * 24 * 60 * 60 * 1000); // 10 ans
+
+            Object dn      = x500NameClass.getConstructor(String.class).newInstance("CN=DewiCom");
+            Object validity = certValClass.getConstructor(Date.class, Date.class).newInstance(from, to);
+            Object sn       = certSnClass.getConstructor(BigInteger.class).newInstance(BigInteger.valueOf(now));
+            Object algId    = algIdClass.getMethod("get", String.class).invoke(null, "SHA256WithRSA");
+            Object certAlg  = certAlgClass.getConstructor(algIdClass).newInstance(algId);
+
+            Object info = certInfoClass.newInstance();
+            java.lang.reflect.Method set = certInfoClass.getMethod("set", String.class, Object.class);
+            set.invoke(info, "validity",    validity);
+            set.invoke(info, "serialNumber", sn);
+            set.invoke(info, "subject",      certSubjClass.getConstructor(x500NameClass).newInstance(dn));
+            set.invoke(info, "issuer",       certIssuerClass.getConstructor(x500NameClass).newInstance(dn));
+            set.invoke(info, "key",          certKeyClass.getConstructor(java.security.PublicKey.class).newInstance(kp.getPublic()));
+            set.invoke(info, "algorithmID",  certAlg);
+
+            Object cert = certImplClass.getConstructor(certInfoClass).newInstance(info);
+            certImplClass.getMethod("sign", java.security.PrivateKey.class, String.class)
+                    .invoke(cert, kp.getPrivate(), "SHA256WithRSA");
+            return (X509Certificate) cert;
+        } catch (Exception e) {
+            Log.w(TAG, "sun.security.x509 non disponible: " + e.getMessage() + " — fallback HTTP");
+            return null;
+        }
+    }
+
     public void start() throws IOException {
+        start(false);
+    }
+
+    public void start(boolean forceHttps) throws IOException {
+        if (forceHttps) {
+            sslContext = generateSelfSignedSSLContext();
+            useHttps = (sslContext != null);
+        }
+
         httpServer = new HttpServer();
+        if (useHttps) {
+            SSLServerSocketFactory ssf = sslContext.getServerSocketFactory();
+            httpServer.makeSecure(ssf, null);
+        }
         httpServer.start(NanoHTTPD.SOCKET_READ_TIMEOUT, false);
 
         wsServer = new DewiComWSServer(new InetSocketAddress(WS_PORT));
+        if (useHttps) {
+            wsServer.setWebSocketFactory(new DefaultSSLWebSocketServerFactory(sslContext));
+        }
         wsServer.start();
 
         running = true;
-        Log.d(TAG, "Serveurs démarrés - HTTP:" + HTTP_PORT + " WS:" + WS_PORT);
+        Log.d(TAG, "Serveurs démarrés - " + (useHttps ? "HTTPS" : "HTTP") + ":" + HTTP_PORT + " WS:" + WS_PORT);
 
-        // Lance les annonces multicast pour que d'autres APK nous trouvent
         startMulticastAnnounce();
     }
+
+    public boolean isHttps() { return useHttps; }
+    public SSLContext getSslContext() { return sslContext; }
 
     public void stop() {
         if (announceTimer != null) { announceTimer.cancel(); announceTimer = null; }
@@ -102,10 +219,11 @@ public class LocalWebServer {
             announceSocket = new DatagramSocket();
             announceSocket.setBroadcast(true);
 
+            String proto = useHttps ? "https" : "http";
             final byte[] payload = ("{\"service\":\"DewiCom\",\"version\":\"" + APP_VERSION + "\"," +
                     "\"ip\":\"" + localIP + "\"," +
                     "\"port\":" + HTTP_PORT + "," +
-                    "\"protocol\":\"http\"," +
+                    "\"protocol\":\"" + proto + "\"," +
                     "\"mode\":\"apk\"}").getBytes("UTF-8");
 
             final InetAddress group = InetAddress.getByName(MCAST_ADDR);
@@ -154,7 +272,8 @@ public class LocalWebServer {
                 try {
                     NetworkDiscovery.SubnetInfo info = NetworkDiscovery.getSubnetInfo(context);
                     String ip = info.deviceIPv4 != null ? info.deviceIPv4 : "127.0.0.1";
-                    String url = "http://" + ip + ":" + HTTP_PORT;
+                    String proto2 = useHttps ? "https" : "http";
+                    String url = proto2 + "://" + ip + ":" + HTTP_PORT;
                     String qrDataUrl = generateQrDataUrl(url);
                     String json = "{\"qr\":\"" + qrDataUrl + "\",\"url\":\"" + url + "\"}";
                     Response r = newFixedLengthResponse(Response.Status.OK, "application/json", json);

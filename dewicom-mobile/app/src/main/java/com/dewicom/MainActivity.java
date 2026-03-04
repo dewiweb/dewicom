@@ -42,6 +42,8 @@ public class MainActivity extends Activity {
     private WebView webView;
     private View connectingView = null;
     private String serverUrl = null;
+    private LocalWebServer localWebServer = null;
+    private boolean serverMode = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -196,7 +198,7 @@ public class MainActivity extends Activity {
         AlertDialog.Builder builder = new AlertDialog.Builder(this)
             .setTitle(title)
             .setView(container)
-            .setCancelable(saved != null) // annulable seulement si on a déjà un serveur
+            .setCancelable(saved != null)
             .setPositiveButton("Connecter", (dialog, w) -> {
                 String raw = input.getText().toString().trim();
                 if (raw.isEmpty()) return;
@@ -204,7 +206,8 @@ public class MainActivity extends Activity {
                 getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                     .edit().putString(PREF_SERVER_URL, url).apply();
                 connectTo(url);
-            });
+            })
+            .setNeutralButton("Mode serveur", (dialog, w) -> startAsServer());
 
         if (saved != null) {
             builder.setNegativeButton("Annuler", null);
@@ -268,6 +271,54 @@ public class MainActivity extends Activity {
         };
     }
 
+    // ── Mode serveur explicite ────────────────────────────────────────────────
+
+    private void startAsServer() {
+        if (localWebServer != null && localWebServer.isAlive()) {
+            Toast.makeText(this, "Serveur déjà actif", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        serverMode = true;
+        new Thread(() -> {
+            try {
+                localWebServer = new LocalWebServer(this);
+                localWebServer.start(true); // HTTPS
+                String proto = localWebServer.isHttps() ? "https" : "http";
+                String ip = getLocalIPAddress();
+                String url = proto + "://127.0.0.1:" + LocalWebServer.HTTP_PORT;
+                String networkUrl = proto + "://" + ip + ":" + LocalWebServer.HTTP_PORT;
+                runOnUiThread(() -> {
+                    Toast.makeText(this,
+                        "Serveur actif (écoute sur " + networkUrl + ")",
+                        Toast.LENGTH_LONG).show();
+                    connectTo(url);
+                });
+            } catch (Exception e) {
+                Log.e(TAG, "Erreur démarrage serveur", e);
+                runOnUiThread(() -> Toast.makeText(this,
+                    "Impossible de démarrer le serveur: " + e.getMessage(),
+                    Toast.LENGTH_LONG).show());
+            }
+        }, "server-start").start();
+    }
+
+    private String getLocalIPAddress() {
+        try {
+            java.util.Enumeration<java.net.NetworkInterface> ifaces =
+                java.net.NetworkInterface.getNetworkInterfaces();
+            while (ifaces.hasMoreElements()) {
+                java.net.NetworkInterface iface = ifaces.nextElement();
+                java.util.Enumeration<java.net.InetAddress> addrs = iface.getInetAddresses();
+                while (addrs.hasMoreElements()) {
+                    java.net.InetAddress addr = addrs.nextElement();
+                    if (!addr.isLoopbackAddress() && addr instanceof java.net.Inet4Address)
+                        return addr.getHostAddress();
+                }
+            }
+        } catch (Exception e) { Log.w(TAG, "getLocalIPAddress", e); }
+        return "127.0.0.1";
+    }
+
     private String normalizeUrl(String raw) {
         if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
         // IP seule ou IP:port → HTTPS par défaut (cert auto-signé accepté via onReceivedSslError)
@@ -303,6 +354,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        if (localWebServer != null) { localWebServer.stop(); localWebServer = null; }
         if (webView != null) webView.destroy();
     }
 
