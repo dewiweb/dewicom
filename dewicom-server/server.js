@@ -67,6 +67,7 @@ const TLS_OPTS  = {
 const LOG_BUFFER_MAX = 500;
 const logBuffer      = [];       // historique des logs
 const monitorClients = new Set(); // socket IDs abonnés au monitoring
+let io = null; // déclaré ici pour que serverLog() y ait accès depuis n'importe où
 
 const _origLog   = console.log.bind(console);
 const _origWarn  = console.warn.bind(console);
@@ -167,7 +168,6 @@ _origLog("[server] Certificat TLS auto-signé généré (valide 10 ans)");
 
 const app         = express();
 const httpsServer = https.createServer({ key: tlsPems.private, cert: tlsPems.cert }, app);
-let io            = null;
 io                = new socketIo(httpsServer, { cors: { origin: "*" } });
 
 // ── Routes ────────────────────────────────────────────────────────────────────
