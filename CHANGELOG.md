@@ -5,6 +5,13 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 
 ---
 
+## [1.4.2] — 2026-03-04
+
+### Corrigé
+- **HTTPS — `ERR_SSL_VERSION_OR_CIPHER_MISMATCH` (cause racine)** : `selfsigned` v5 retourne une **Promise** — le `generate()` synchrone retournait un objet vide, le serveur HTTPS démarrait avec `key: undefined` et `cert: undefined`. Fix : `await selfsigned.generate()` dans une `async` IIFE (`server.js`) et dans `async function start()` (`local-server.js`) — `dewicom-server/server.js`, `dewicom-desktop/local-server.js`
+
+---
+
 ## [1.4.1] — 2026-03-04
 
 ### Corrigé
